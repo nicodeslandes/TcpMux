@@ -16,14 +16,32 @@ namespace TcpMux
     {
         static bool Verbose = false;
         static bool Ssl = false;
+        static bool DumpHex = false;
+        static bool DumpText = false;
 
         static readonly RemoteCertificateValidationCallback ServerCertificateValidationCallback =
             (object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors sslPolicyErrors) =>
         {
-            Console.WriteLine($"Validating certificate from {cert.Subject}");
+            LogVerbose($"Validating certificate from {cert.Subject}");
             return true;
 
         };
+
+        private static void LogVerbose(string message, bool addNewLine = true)
+        {
+            if (Verbose)
+                Log(message, addNewLine);
+        }
+
+        private static void Log(string message, bool addNewLine = true)
+        {
+            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            if (addNewLine)
+                Console.WriteLine($"{timestamp} {message}");
+            else
+                Console.Write($"{timestamp} {message}");
+        }
+
         static int Main(string[] args)
         {
             if (args.Length < 3)
@@ -31,6 +49,8 @@ namespace TcpMux
                 Console.Error.WriteLine($"Usage: tcpmux [options] <listen_port> <target_host> <target_port>\n" +
                                         $"  options:\n" +
                                         $"     -v: Verbose mode; display traffic\n" +
+                                        $"     -hex: Hex mode; display traffic as hex dump\n" +
+                                        $"     -text: Text mode; display traffic as text dump\n" +
                                         $"     -ssl: perform ssl decoding and reencoding\n\n"
                     );
                 return 1;
@@ -51,6 +71,12 @@ namespace TcpMux
                         case "-ssl":
                             Ssl = true;
                             break;
+                        case "-hex":
+                            DumpHex = true;
+                            break;
+                        case "-text":
+                            DumpText = true;
+                            break;
                         default:
                             Console.WriteLine($"Invalid option: {option}");
                             return 1;
@@ -62,12 +88,12 @@ namespace TcpMux
                 }
             }
 
-            int listenPort = int.Parse(args[0]);
-            string targetHost = args[1];
-            int targetPort = int.Parse(args[2]);
+            int listenPort = int.Parse(args[i++]);
+            string targetHost = args[i++];
+            int targetPort = int.Parse(args[i++]);
 
-            Console.WriteLine($"Preparing message routing to {targetHost}:{targetPort}");
-            Console.Write($"Opening local port {listenPort}...");
+            Log($"Preparing message routing to {targetHost}:{targetPort}");
+            Log($"Opening local port {listenPort}...", addNewLine: false);
             var listener = new TcpListener(IPAddress.Any, listenPort);
             listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, false);
             listener.Start();
@@ -103,11 +129,11 @@ namespace TcpMux
             try
             {
                 client.NoDelay = true;
-                Console.WriteLine($"New client connection: {client.Client.RemoteEndPoint}");
+                Log($"New client connection: {client.Client.RemoteEndPoint}");
                 Console.Write($"Opening connection to {targetHost}:{targetPort}...");
 
                 var target = new TcpClient(targetHost, targetPort) {NoDelay = true};
-                Console.WriteLine($" opened target connection: {target.Client.RemoteEndPoint}");
+                Log($" opened target connection: {target.Client.RemoteEndPoint}");
 
                 Stream sourceStream = client.GetStream();
                 Stream targetStream = target.GetStream();
@@ -115,17 +141,18 @@ namespace TcpMux
                 if (Ssl)
                 {
                     var sslSourceStream = new SslStream(client.GetStream());
-                    Console.WriteLine($"Performing SSL authentication with client {client.Client.RemoteEndPoint}");
+                    Log($"Performing SSL authentication with client {client.Client.RemoteEndPoint}");
                     await sslSourceStream.AuthenticateAsServerAsync(certificate, false,
                         SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12, false);
-                    Console.WriteLine($"SSL authentication with client {client.Client.RemoteEndPoint} successful");
+                    LogVerbose($"SSL authentication with client {client.Client.RemoteEndPoint} successful");
                     sourceStream = sslSourceStream;
 
-                    Console.WriteLine($"Performing SSL authentication with server {target.Client.RemoteEndPoint}");
+                    LogVerbose($"Performing SSL authentication with server {target.Client.RemoteEndPoint}");
                     var sslTargetStream = new SslStream(targetStream, false, ServerCertificateValidationCallback);
                     await sslTargetStream.AuthenticateAsClientAsync(targetHost, null, SslProtocols.Tls12, false);
-                    Console.WriteLine($"SSL authentication with server {target.Client.RemoteEndPoint} successful; " +
+                    LogVerbose($"SSL authentication with server {target.Client.RemoteEndPoint} successful; " +
                                       $"server cert Subject: {sslTargetStream.RemoteCertificate?.Subject}");
+                    targetStream = sslTargetStream;
                 }
 
                 RouteMessages(sourceStream, client.Client.RemoteEndPoint,
@@ -135,7 +162,7 @@ namespace TcpMux
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error: " + ex);
+                Log("Error: " + ex);
             }
         }
 
@@ -150,18 +177,22 @@ namespace TcpMux
                     var read = await source.ReadAsync(buffer, 0, buffer.Length);
                     if (read == 0)
                     {
-                        Console.WriteLine($"Connection {sourceRemoteEndPoint} closed; " +
-                                          $"closing connection {targetRemoteEndPoint}");
+                        Log($"Connection {sourceRemoteEndPoint} closed; closing connection {targetRemoteEndPoint}");
                         target.Close();
                         return;
                     }
 
-                    Console.Write(
-                        $"Sending data from {sourceRemoteEndPoint} to {targetRemoteEndPoint}...");
-                    await target.WriteAsync(buffer, 0, read);
-                    Console.WriteLine($" {read} bytes sent");
-                    if (Verbose)
+                    Log($"Sending data from {sourceRemoteEndPoint} to {targetRemoteEndPoint}...");
+                    if (DumpHex)
                         Console.WriteLine(Utils.HexDump(buffer, 0, read));
+
+                    if (DumpText)
+                    {
+                        var text = Encoding.UTF8.GetString(buffer, 0, read);
+                        Console.WriteLine(text);
+                    }
+                    await target.WriteAsync(buffer, 0, read);
+                    Log($"{read} bytes sent");
                 }
             });
         }
