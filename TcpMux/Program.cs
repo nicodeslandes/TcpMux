@@ -18,6 +18,7 @@ namespace TcpMux
         static bool Ssl = false;
         static bool DumpHex = false;
         static bool DumpText = false;
+        static string SslCn = null;
 
         static readonly RemoteCertificateValidationCallback ServerCertificateValidationCallback =
             (object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors sslPolicyErrors) =>
@@ -44,53 +45,65 @@ namespace TcpMux
 
         static int Main(string[] args)
         {
-            if (args.Length < 3)
+            List<string> remainingArgs = new List<string>();
+
+            for (int i = 0;i < args.Length; i++)
+            {
+                var arg = args[i];
+                if (arg[0] != '-')
+                {
+                    remainingArgs.Add(arg);
+                    continue;
+                }
+
+                switch (arg)
+                {
+                    case "-v":
+                        Verbose = true;
+                        CertificateFactory.Verbose = true;
+                        break;
+                    case "-ssl":
+                        Ssl = true;
+                        break;
+                    case "-sslCn":
+                        if (i >= args.Length || (SslCn = args[++i])[0] == '-')
+                        {
+                            Console.WriteLine("Missing SSL CN");
+                            return 1;
+                        }
+                        break;
+                    case "-hex":
+                        DumpHex = true;
+                        break;
+                    case "-text":
+                        DumpText = true;
+                        break;
+                    case "-regCACert":
+                        RegisterCACert();
+                        return 0;
+                    default:
+                        Console.WriteLine($"Invalid option: {arg}");
+                        return 1;
+                }
+            }
+
+            if (remainingArgs.Count != 3)
             {
                 Console.Error.WriteLine($"Usage: tcpmux [options] <listen_port> <target_host> <target_port>\n" +
                                         $"  options:\n" +
                                         $"     -v: Verbose mode; display traffic\n" +
                                         $"     -hex: Hex mode; display traffic as hex dump\n" +
                                         $"     -text: Text mode; display traffic as text dump\n" +
-                                        $"     -ssl: perform ssl decoding and reencoding\n\n"
-                    );
+                                        $"     -ssl: perform ssl decoding and reencoding\n" +
+                                        $"     -sslCn: CN to use in the generated SSL certificate (defaults to <target_host>)\n" +
+                                        $"     -regCACert: register self-signed certificate CA\n\n"
+                );
                 return 1;
             }
 
-            int i = 0;
-            while (true)
-            {
-                if (args[i][0] == '-')
-                {
-                    var option = args[i++];
-                    switch (option)
-                    {
-
-                        case "-v":
-                            Verbose = true;
-                            break;
-                        case "-ssl":
-                            Ssl = true;
-                            break;
-                        case "-hex":
-                            DumpHex = true;
-                            break;
-                        case "-text":
-                            DumpText = true;
-                            break;
-                        default:
-                            Console.WriteLine($"Invalid option: {option}");
-                            return 1;
-                    }
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            int listenPort = int.Parse(args[i++]);
-            string targetHost = args[i++];
-            int targetPort = int.Parse(args[i++]);
+            int listenPort = int.Parse(remainingArgs[0]);
+            string targetHost = remainingArgs[1];
+            int targetPort = int.Parse(remainingArgs[2]);
 
             Log($"Preparing message routing to {targetHost}:{targetPort}");
             Log($"Opening local port {listenPort}...", addNewLine: false);
@@ -102,9 +115,7 @@ namespace TcpMux
             X509Certificate2 certificate = null;
             if (Ssl)
             {
-                var store = new X509Store(StoreLocation.CurrentUser);
-                store.Open(OpenFlags.OpenExistingOnly);
-                certificate = store.Certificates.Cast<X509Certificate2>().First(c => c.Subject == "CN=surface4");
+                certificate = CertificateFactory.GetCertificateForSubject(SslCn ?? targetHost);
             }
 
             Task.Run(async () =>
@@ -120,6 +131,26 @@ namespace TcpMux
             while (true)
             {
                 Console.Read();
+            }
+        }
+
+        private static void RegisterCACert()
+        {
+            Console.WriteLine("Press Enter to register the CA Certificate for TcpMux to your certificate store");
+            Console.ReadLine();
+
+            try
+            {
+                Console.WriteLine("Generating CA Certificate...");
+                var cert = CertificateFactory.GenerateCACertificate(CertificateFactory.TcpMuxCASubjectDN);
+                Console.WriteLine("Registering certificate in current user store");
+
+                // Add CA certificate to Root store
+                CertificateFactory.AddCertToStore(cert, StoreName.Root, StoreLocation.CurrentUser);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
             }
         }
 
