@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Pkcs;
@@ -26,7 +25,7 @@ namespace TcpMux
         public static readonly string TcpMuxCASubjectDN = $"CN={TcpMuxCASubject}";
         public static bool Verbose { get; set; }
 
-        public static X509Certificate2 GenerateSelfSignedCertificate(string subjectName, string issuerName, AsymmetricKeyParameter issuerPrivKey, int keyStrength = 2048)
+        public static X509Certificate2 GenerateCertificate(string subjectName, X509Certificate2 issuerCertificate, int keyStrength = 2048)
         {
             if (Verbose)
                 Console.WriteLine($"Generating certificate for {subjectName}");
@@ -44,22 +43,25 @@ namespace TcpMux
 
             //// Signature Algorithm
             const string signatureAlgorithm = "SHA256WithRSA";
-            //certificateGenerator.SetSignatureAlgorithm(signatureAlgorithm);
+            var issuerKeyPair = DotNetUtilities.GetKeyPair(issuerCertificate.PrivateKey);
+            var issuerSerialNumber = new BigInteger(issuerCertificate.GetSerialNumber());
 
             // Issuer and Subject Name
             var subjectDN = new X509Name(subjectName);
-            var issuerDN = new X509Name(issuerName);
+            var issuerDN = new X509Name(issuerCertificate.Subject);
             certificateGenerator.SetIssuerDN(issuerDN);
             certificateGenerator.SetSubjectDN(subjectDN);
 
-            // Valid For
+            AddAuthorityKeyIdentifier(certificateGenerator, issuerDN, issuerKeyPair.Public, issuerSerialNumber);
+
+            // Valid For the next 2 year
             var notBefore = DateTime.UtcNow.Date;
             var notAfter = notBefore.AddYears(2);
 
             certificateGenerator.SetNotBefore(notBefore);
             certificateGenerator.SetNotAfter(notAfter);
 
-            // Subject Public Key
+            // Subject Public/Private Key Pair
             var keyGenerationParameters = new KeyGenerationParameters(random, keyStrength);
             var keyPairGenerator = new RsaKeyPairGenerator();
             keyPairGenerator.Init(keyGenerationParameters);
@@ -69,30 +71,38 @@ namespace TcpMux
 
             // Generating the Certificate
 
-            // selfsign certificate
-            var signatureFactory = new Asn1SignatureFactory(signatureAlgorithm, subjectKeyPair.Private, random);
+            // CA-signed certificate
+            var signatureFactory = new Asn1SignatureFactory(signatureAlgorithm, issuerKeyPair.Private, random);
             var certificate = certificateGenerator.Generate(signatureFactory);
 
-            // correcponding private key
-            PrivateKeyInfo info = PrivateKeyInfoFactory.CreatePrivateKeyInfo(subjectKeyPair.Private);
-
-
             // merge into X509Certificate2
-            var x509 = new X509Certificate2(certificate.GetEncoded());
-
-            var seq = (Asn1Sequence)Asn1Object.FromByteArray(info.ParsePrivateKey().GetDerEncoded());
-            if (seq.Count != 9)
-                throw new PemException("malformed sequence in RSA private key");
-
-            var rsa = RsaPrivateKeyStructure.GetInstance(seq);
-            RsaPrivateCrtKeyParameters rsaparams = new RsaPrivateCrtKeyParameters(
-                rsa.Modulus, rsa.PublicExponent, rsa.PrivateExponent, rsa.Prime1, rsa.Prime2, rsa.Exponent1, rsa.Exponent2, rsa.Coefficient);
-
-            x509.PrivateKey = DotNetUtilities.ToRSA(rsaparams);
-            return x509;
+            return new X509Certificate2(DotNetUtilities.ToX509Certificate(certificate))
+            {
+                PrivateKey = DotNetUtilities.ToRSA((RsaPrivateCrtKeyParameters) subjectKeyPair.Private)
+            };
 
         }
 
+        /// <summary>
+        /// Add the Authority Key Identifier. According to http://www.alvestrand.no/objectid/2.5.29.35.html, this
+        /// identifies the public key to be used to verify the signature on this certificate.
+        /// In a certificate chain, this corresponds to the "Subject Key Identifier" on the *issuer* certificate.
+        /// The Bouncy Castle documentation, at http://www.bouncycastle.org/wiki/display/JA1/X.509+Public+Key+Certificate+and+Certification+Request+Generation,
+        /// shows how to create this from the issuing certificate. Since we're creating a self-signed certificate, we have to do this slightly differently.
+        /// </summary>
+        private static void AddAuthorityKeyIdentifier(X509V3CertificateGenerator certificateGenerator,
+            X509Name issuerDN,
+            AsymmetricKeyParameter issuerPublicKey,
+            BigInteger issuerSerialNumber)
+        {
+            var authorityKeyIdentifierExtension =
+                new AuthorityKeyIdentifier(
+                    SubjectPublicKeyInfoFactory.CreateSubjectPublicKeyInfo(issuerPublicKey),
+                    new GeneralNames(new GeneralName(issuerDN)),
+                    issuerSerialNumber);
+            certificateGenerator.AddExtension(
+                X509Extensions.AuthorityKeyIdentifier.Id, false, authorityKeyIdentifierExtension);
+        }
 
         public static X509Certificate2 GenerateCACertificate(string subjectName, int keyStrength = 2048)
         {
@@ -115,8 +125,7 @@ namespace TcpMux
 
             // Issuer and Subject Name
             var subjectDN = new X509Name(subjectName);
-            var issuerDN = subjectDN;
-            certificateGenerator.SetIssuerDN(issuerDN);
+            certificateGenerator.SetIssuerDN(subjectDN);
             certificateGenerator.SetSubjectDN(subjectDN);
 
             // Valid For
@@ -125,6 +134,10 @@ namespace TcpMux
 
             certificateGenerator.SetNotBefore(notBefore);
             certificateGenerator.SetNotAfter(notAfter);
+
+            // Indicate we're a CA
+            certificateGenerator.AddExtension(
+                X509Extensions.BasicConstraints.Id, true, new BasicConstraints(cA: true));
 
             // Subject Public Key
             var keyGenerationParameters = new KeyGenerationParameters(random, keyStrength);
@@ -173,10 +186,7 @@ namespace TcpMux
                     else
                     {
                         var tcpMuxCACert = GetCertificateForSubject(TcpMuxCASubject);
-                        var tcpMuxCAPrivateKey = TransformRSAPrivateKey(tcpMuxCACert.PrivateKey);
-
-                        // TODO: use the CA as the issuer
-                        cert = GenerateSelfSignedCertificate($"CN={subject}", $"CN={subject}", tcpMuxCAPrivateKey);
+                        cert = GenerateCertificate($"CN={subject}", tcpMuxCACert);
                     }
                 }
 
@@ -186,27 +196,11 @@ namespace TcpMux
             return cert;
         }
 
-        public static AsymmetricKeyParameter TransformRSAPrivateKey(AsymmetricAlgorithm privateKey)
-        {
-            RSACryptoServiceProvider prov = privateKey as RSACryptoServiceProvider;
-            RSAParameters parameters = prov.ExportParameters(true);
-
-            return new RsaPrivateCrtKeyParameters(
-                new BigInteger(1, parameters.Modulus),
-                new BigInteger(1, parameters.Exponent),
-                new BigInteger(1, parameters.D),
-                new BigInteger(1, parameters.P),
-                new BigInteger(1, parameters.Q),
-                new BigInteger(1, parameters.DP),
-                new BigInteger(1, parameters.DQ),
-                new BigInteger(1, parameters.InverseQ));
-        }
-
         private static X509Certificate2 LoadExistingPrivateKeyCertificate(string subject)
         {
             var store =
                 subject == TcpMuxCASubject
-                ? new X509Store(StoreName.CertificateAuthority, StoreLocation.CurrentUser)
+                ? new X509Store(StoreName.Root, StoreLocation.CurrentUser)
                 : new X509Store(StoreLocation.CurrentUser);
             store.Open(OpenFlags.OpenExistingOnly);
             var existingCertificate = store.Certificates.Cast<X509Certificate2>()
