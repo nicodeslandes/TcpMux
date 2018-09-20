@@ -89,14 +89,14 @@ namespace TcpMux
 
             if (remainingArgs.Count != 3)
             {
-                Console.Error.WriteLine($"Usage: tcpmux [options] <listen_port> <target_host> <target_port>\n" +
-                                        $"  options:\n" +
-                                        $"     -v: Verbose mode; display traffic\n" +
-                                        $"     -hex: Hex mode; display traffic as hex dump\n" +
-                                        $"     -text: Text mode; display traffic as text dump\n" +
-                                        $"     -ssl: perform ssl decoding and reencoding\n" +
-                                        $"     -sslCn: CN to use in the generated SSL certificate (defaults to <target_host>)\n" +
-                                        $"     -regCACert: register self-signed certificate CA\n\n"
+                Console.Error.WriteLine("Usage: tcpmux [options] <listen_port> <target_host> <target_port>\n" +
+                                        "  options:\n" +
+                                        "     -v: Verbose mode; display traffic\n" +
+                                        "     -hex: Hex mode; display traffic as hex dump\n" +
+                                        "     -text: Text mode; display traffic as text dump\n" +
+                                        "     -ssl: perform ssl decoding and reencoding\n" +
+                                        "     -sslCn: CN to use in the generated SSL certificate (defaults to <target_host>)\n" +
+                                        "     -regCACert: register self-signed certificate CA\n\n"
                 );
                 return 1;
             }

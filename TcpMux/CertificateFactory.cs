@@ -25,7 +25,7 @@ namespace TcpMux
         public static readonly string TcpMuxCASubjectDN = $"CN={TcpMuxCASubject}";
         public static bool Verbose { get; set; }
 
-        public static X509Certificate2 GenerateCertificate(string subjectName, X509Certificate2 issuerCertificate, int keyStrength = 2048)
+        public static X509Certificate2 GenerateCertificate(string subjectName, int keyStrength = 2048)
         {
             if (Verbose)
                 Console.WriteLine($"Generating certificate for {subjectName}");
@@ -43,16 +43,16 @@ namespace TcpMux
 
             //// Signature Algorithm
             const string signatureAlgorithm = "SHA256WithRSA";
-            var issuerKeyPair = DotNetUtilities.GetKeyPair(issuerCertificate.PrivateKey);
-            var issuerSerialNumber = new BigInteger(issuerCertificate.GetSerialNumber());
+            //var issuerKeyPair = DotNetUtilities.GetKeyPair(issuerCertificate.PrivateKey);
+            //var issuerSerialNumber = new BigInteger(issuerCertificate.GetSerialNumber());
 
             // Issuer and Subject Name
             var subjectDN = new X509Name(subjectName);
-            var issuerDN = new X509Name(issuerCertificate.Subject);
+            var issuerDN = subjectDN;
             certificateGenerator.SetIssuerDN(issuerDN);
             certificateGenerator.SetSubjectDN(subjectDN);
 
-            AddAuthorityKeyIdentifier(certificateGenerator, issuerDN, issuerKeyPair.Public, issuerSerialNumber);
+            //AddAuthorityKeyIdentifier(certificateGenerator, issuerDN, issuerKeyPair.Public, issuerSerialNumber);
 
             // Valid For the next 2 year
             var notBefore = DateTime.UtcNow.Date;
@@ -72,7 +72,7 @@ namespace TcpMux
             // Generating the Certificate
 
             // CA-signed certificate
-            var signatureFactory = new Asn1SignatureFactory(signatureAlgorithm, issuerKeyPair.Private, random);
+            var signatureFactory = new Asn1SignatureFactory(signatureAlgorithm, subjectKeyPair.Private, random);
             var certificate = certificateGenerator.Generate(signatureFactory);
 
             // merge into X509Certificate2
@@ -186,7 +186,7 @@ namespace TcpMux
                     else
                     {
                         var tcpMuxCACert = GetCertificateForSubject(TcpMuxCASubject);
-                        cert = GenerateCertificate($"CN={subject}", tcpMuxCACert);
+                        cert = GenerateCertificate($"CN={subject}");
                     }
                 }
 
