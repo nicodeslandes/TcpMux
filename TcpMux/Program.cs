@@ -16,6 +16,7 @@ namespace TcpMux
     {
         static bool Verbose = false;
         static bool Ssl = false;
+        static bool SslOffload = false;
         static bool DumpHex = false;
         static bool DumpText = false;
         static string SslCn = null;
@@ -65,6 +66,9 @@ namespace TcpMux
                     case "-ssl":
                         Ssl = true;
                         break;
+                    case "-sslOff":
+                        SslOffload = true;
+                        break;
                     case "-sslCn":
                         if (i >= args.Length || (SslCn = args[++i])[0] == '-')
                         {
@@ -95,6 +99,7 @@ namespace TcpMux
                                         "     -hex: Hex mode; display traffic as hex dump\n" +
                                         "     -text: Text mode; display traffic as text dump\n" +
                                         "     -ssl: perform ssl decoding and reencoding\n" +
+                                        "     -sslOff: perform ssl off-loading (ie connect to the target via SSL, and expose a decrypted port)\n" +
                                         "     -sslCn: CN to use in the generated SSL certificate (defaults to <target_host>)\n" +
                                         "     -regCACert: register self-signed certificate CA\n\n"
                 );
@@ -177,7 +182,10 @@ namespace TcpMux
                         SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12, false);
                     LogVerbose($"SSL authentication with client {client.Client.RemoteEndPoint} successful");
                     sourceStream = sslSourceStream;
+                }
 
+                if (Ssl || SslOffload)
+                {
                     LogVerbose($"Performing SSL authentication with server {target.Client.RemoteEndPoint}");
                     var sslTargetStream = new SslStream(targetStream, false, ServerCertificateValidationCallback);
                     await sslTargetStream.AuthenticateAsClientAsync(targetHost, null, SslProtocols.Tls12, false);
