@@ -3,6 +3,13 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>netcoreapp2.1;net452</TargetFrameworks>
+    <Title>TcpMux</Title>
+    <Description>TCP Multiplexer; provide simple routing of TCP traffic as well as SSL re-encryption and off-loading</Description>
+    <Company>Triskel Software</Company>
+    <Product>TcpMux</Product>
+    <Copyright>Copyright © 2018</Copyright>
+    <Version>1.0.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
