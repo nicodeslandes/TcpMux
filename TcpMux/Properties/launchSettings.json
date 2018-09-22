@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "TcpMux": {
+      "commandName": "Project",
+      "commandLineArgs": "-v -text -ssl -sslCn *.wikipedia.org 443 91.198.174.192 443"
+    },
+    "RegCA": {
+      "commandName": "Project",
+      "commandLineArgs": "-v -regCA"
+    }
+  }
+}

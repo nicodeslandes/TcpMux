@@ -82,7 +82,7 @@ namespace TcpMux
                     case "-text":
                         DumpText = true;
                         break;
-                    case "-regCACert":
+                    case "-regCA":
                         RegisterCACert();
                         return 0;
                     default:
@@ -101,7 +101,7 @@ namespace TcpMux
                                         "     -ssl: perform ssl decoding and reencoding\n" +
                                         "     -sslOff: perform ssl off-loading (ie connect to the target via SSL, and expose a decrypted port)\n" +
                                         "     -sslCn: CN to use in the generated SSL certificate (defaults to <target_host>)\n" +
-                                        "     -regCACert: register self-signed certificate CA\n\n"
+                                        "     -regCA: register self-signed certificate CA\n\n"
                 );
                 return 1;
             }
@@ -147,7 +147,8 @@ namespace TcpMux
             try
             {
                 Console.WriteLine("Generating CA Certificate...");
-                var cert = CertificateFactory.GenerateCACertificate(CertificateFactory.TcpMuxCASubjectDN);
+                var cert =
+                    CertificateFactory.GenerateCertificate(CertificateFactory.TcpMuxCASubjectDN, generateCA: true);
                 Console.WriteLine("Registering certificate in current user store");
 
                 // Add CA certificate to Root store
