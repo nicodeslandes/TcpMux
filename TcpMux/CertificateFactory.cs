@@ -25,10 +25,12 @@ namespace TcpMux
         public static readonly string TcpMuxCASubjectDN = $"CN={TcpMuxCASubject}";
         public static bool Verbose { get; set; }
 
-        public static X509Certificate2 GenerateCertificate(string subjectName, int keyStrength = 2048)
+        public static X509Certificate2 GenerateCertificate(string subjectName, X509Certificate2 issuerCertificate = null,
+            int keyStrength = 2048)
         {
+            var signWithCA = issuerCertificate != null;
             if (Verbose)
-                Console.WriteLine($"Generating certificate for {subjectName}");
+                Console.WriteLine($"Generating {(signWithCA ? "" : "self-signed ")}certificate for {subjectName}");
 
             // Generating Random Numbers
             var randomGenerator = new CryptoApiRandomGenerator();
@@ -41,18 +43,14 @@ namespace TcpMux
             var serialNumber = BigIntegers.CreateRandomInRange(BigInteger.One, BigInteger.ValueOf(Int64.MaxValue), random);
             certificateGenerator.SetSerialNumber(serialNumber);
 
-            //// Signature Algorithm
+            // Signature Algorithm
             const string signatureAlgorithm = "SHA256WithRSA";
-            //var issuerKeyPair = DotNetUtilities.GetKeyPair(issuerCertificate.PrivateKey);
-            //var issuerSerialNumber = new BigInteger(issuerCertificate.GetSerialNumber());
 
             // Issuer and Subject Name
             var subjectDN = new X509Name(subjectName);
-            var issuerDN = subjectDN;
+            var issuerDN = signWithCA ? new X509Name(issuerCertificate.Subject) : subjectDN;
             certificateGenerator.SetIssuerDN(issuerDN);
             certificateGenerator.SetSubjectDN(subjectDN);
-
-            //AddAuthorityKeyIdentifier(certificateGenerator, issuerDN, issuerKeyPair.Public, issuerSerialNumber);
 
             // Valid For the next 2 year
             var notBefore = DateTime.UtcNow.Date;
@@ -70,9 +68,21 @@ namespace TcpMux
             certificateGenerator.SetPublicKey(subjectKeyPair.Public);
 
             // Generating the Certificate
+            // For CA-signed certificate, we use the issuer private key, or for self-signed we use the cert's own key
+            AsymmetricKeyParameter signingPrivateKey;
+            if (signWithCA)
+            {
+                var issuerKeyPair = DotNetUtilities.GetKeyPair(issuerCertificate.PrivateKey);
+                var issuerSerialNumber = new BigInteger(issuerCertificate.GetSerialNumber());
+                AddAuthorityKeyIdentifier(certificateGenerator, issuerDN, issuerKeyPair.Public, issuerSerialNumber);
+                signingPrivateKey = issuerKeyPair.Private;
+            }
+            else
+            {
+                signingPrivateKey = subjectKeyPair.Private;
+            }
 
-            // CA-signed certificate
-            var signatureFactory = new Asn1SignatureFactory(signatureAlgorithm, subjectKeyPair.Private, random);
+            var signatureFactory = new Asn1SignatureFactory(signatureAlgorithm, signingPrivateKey, random);
             var certificate = certificateGenerator.Generate(signatureFactory);
 
             // merge into X509Certificate2
@@ -186,7 +196,7 @@ namespace TcpMux
                     else
                     {
                         var tcpMuxCACert = GetCertificateForSubject(TcpMuxCASubject);
-                        cert = GenerateCertificate($"CN={subject}");
+                        cert = GenerateCertificate($"CN={subject}", tcpMuxCACert);
                     }
                 }
 

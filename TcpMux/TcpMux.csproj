@@ -25,5 +25,8 @@
   <Target Name="ILRepack" AfterTargets="Build" Condition="'$(TargetFramework)' == 'net452' AND '$(Configuration)' == 'Release'">
     <Message Text="Executing ILRepack in $(ProjectDir)" />
     <Exec Command="$(ILRepackConsolePath) /out:$(OutDir)TcpMux.exe $(OutDir)TcpMux.exe $(OutDir)BouncyCastle.Crypto.dll" WorkingDirectory="$(ProjectDir)" />
+    
+    <!-- PDB is not usable after ILRepack does its magic, so we might as well delete it -->
+    <Delete Files="$(OutDir)$(TargetName).pdb;$(OutDir)BouncyCastle.Crypto.dll" />
   </Target>
 </Project>
