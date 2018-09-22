@@ -13,7 +13,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ILRepack" Version="2.0.16" />
     <PackageReference Include="Portable.BouncyCastle" Version="1.8.3" />
   </ItemGroup>
 
+  <!-- For the .NET Framework 4.5 Release build, use ILRepack to generate a single exe -->
+  <PropertyGroup>
+    <ILRepackConsolePath>$(NuGetPackageRoot)ilrepack/2.0.16/tools/ILRepack.exe</ILRepackConsolePath>
+  </PropertyGroup>
+
+  <Target Name="ILRepack" AfterTargets="Build" Condition="'$(TargetFramework)' == 'net452' AND '$(Configuration)' == 'Release'">
+    <Message Text="Executing ILRepack in $(ProjectDir)" />
+    <Exec Command="$(ILRepackConsolePath) /out:$(OutDir)TcpMux.exe $(OutDir)TcpMux.exe $(OutDir)BouncyCastle.Crypto.dll" WorkingDirectory="$(ProjectDir)" />
+  </Target>
 </Project>

@@ -14,7 +14,7 @@
     <ILMergeLibraryPath></ILMergeLibraryPath>
 
     <!-- The solution NuGet package directory if not standard 'SOLUTION\packages' -->
-    <ILMergePackagesPath></ILMergePackagesPath>
+    <ILMergePackagesPath>$(NuGetPackageRoot)</ILMergePackagesPath>
 
     <!-- The merge order file name if differs from standard 'ILMergeOrder.txt' -->
     <ILMergeOrderFile></ILMergeOrderFile>
