@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <PackageReference Include="ILRepack" Version="2.0.16" Condition="'$(TargetFramework)' == 'net452'" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Kubernetes.Tools.Targets" Version="0.18.1779678" />
     <PackageReference Include="Portable.BouncyCastle" Version="1.8.3" />
   </ItemGroup>
 
