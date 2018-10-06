@@ -7,28 +7,13 @@ pool:
   vmImage: 'vs2017-win2016'
 
 variables:
-  version: 1.1
+  version: 1.2
+  fullVersion: $(version).$(Year:yy)$(DayOfYear)$(Rev:.r)
 
-name: $(SourceBranchName)_$(version).$(Year:yy)$(DayOfYear)$(Rev:.r)
+name: $(SourceBranchName)_$(fullVersion)
 
 steps:
-- task: DotNetCoreCLI@2
+- script: dotnet pack TcpMux/TcpMux.csproj -p:Version=$(fullVersion) -o $(Build.ArtifactStagingDirectory)
   displayName: 'Build package'
-  inputs:
-    command: 'pack'
-    packagesToPack: TcpMux/TcpMux.csproj
-    packDirectory: $(Build.ArtifactStagingDirectory)
-    versioningScheme: byBuildNumber
-    majorVersion: 1
-    minorVersion: 1
 
 - task: PublishBuildArtifacts@1
-
-# - task: NuGetCommand@2
-#   displayName: 'Publish to MyGet'
-#   inputs:
-#     command: push
-#     nuGetFeedType: external
-#     publishFeedCredentials: myget
-#     versioningScheme: byEnvVar
-#     versionEnvVar: Version
