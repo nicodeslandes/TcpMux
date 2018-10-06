@@ -8,7 +8,14 @@
     <Description>TCP Multiplexer; provide simple routing of TCP traffic as well as SSL re-encryption and off-loading</Description>
     <Company>Triskel Software</Company>
     <Product>tcpmux</Product>
-    <Copyright>Copyright © 2018</Copyright>    
+    <Copyright>Copyright © 2018</Copyright>
+    <Authors>Nicolas Deslandes</Authors>
+
+    <PackageProjectUrl>https://github.com/nicodeslandes/TcpMux</PackageProjectUrl>
+    <PackageLicenseUrl>https://raw.githubusercontent.com/nicodeslandes/TcpMux/master/LICENSE</PackageLicenseUrl>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/nicodeslandes/TcpMux.git</RepositoryUrl>
   </PropertyGroup>
   
   <PropertyGroup Condition="'$(TargetFramework)'!='net452'">
