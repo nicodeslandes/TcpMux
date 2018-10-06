@@ -8,7 +8,10 @@ pool:
 
 variables:
   version: 1.2
-  fullVersion: $(version).$(Year:yy)$(DayOfYear)$(Rev:.r)
+
+# Create a variable
+- script: |
+    echo '##vso[task.setvariable variable=fullVersion]$(version).$(Year:yy)$(DayOfYear)$(Rev:.r)'
 
 name: $(SourceBranchName)_$(fullVersion)
 
