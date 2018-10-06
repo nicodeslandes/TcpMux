@@ -6,6 +6,11 @@
 pool:
   vmImage: 'vs2017-win2016'
 
+variables:
+  version: 1.1
+
+name:  $(TeamProject)_$(BuildDefinitionName)_$(SourceBranchName)_$(version).$(Rev:.r)
+
 steps:
 - task: DotNetCoreCLI@2
   displayName: 'Build package'
