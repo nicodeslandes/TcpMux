@@ -6,12 +6,15 @@
 pool:
   vmImage: 'vs2017-win2016'
 
+name: $(Year:yy)$(DayOfYear)$(Rev:.r)
+
 variables:
   version: 1.2
+  fullVersion: $(version).$(BuildNumber)
 
 steps:
-- script: echo '##vso[task.setvariable variable=fullVersion]$(version).$(Year:yy)$(DayOfYear)$(Rev:.r)'
-- script: echo '##vso[build.updatebuildnumber]$(fullVersion)
+#- script: echo '##vso[task.setvariable variable=fullVersion]$(version).$(Year:yy)$(DayOfYear)$(Rev:.r)'
+#- script: echo '##vso[build.updatebuildnumber]$(fullVersion)
 - script: dotnet pack TcpMux/TcpMux.csproj -p:Version=$(fullVersion) -o $(Build.ArtifactStagingDirectory)
   displayName: 'Build package'
 
