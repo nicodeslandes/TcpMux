@@ -7,8 +7,13 @@ pool:
   vmImage: 'vs2017-win2016'
 
 steps:
-- script: dotnet pack TcpMux/TcpMux.csproj --output $(Build.ArtifactStagingDirectory)
+- task: DotNetCoreCLI@2
   displayName: 'Build package'
+  inputs:
+    command: 'pack'
+    packagesToPack: TcpMux/TcpMux.csproj
+    packDirectory: $(Build.ArtifactStagingDirectory)
+    versioningScheme: byBuildNumber
 
 - task: PublishBuildArtifacts@1
 
