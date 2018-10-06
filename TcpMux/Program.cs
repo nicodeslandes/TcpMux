@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -93,15 +94,24 @@ namespace TcpMux
 
             if (remainingArgs.Count != 3)
             {
-                Console.Error.WriteLine("Usage: tcpmux [options] <listen_port> <target_host> <target_port>\n" +
-                                        "  options:\n" +
-                                        "     -v: Verbose mode; display traffic\n" +
-                                        "     -hex: Hex mode; display traffic as hex dump\n" +
-                                        "     -text: Text mode; display traffic as text dump\n" +
-                                        "     -ssl: perform ssl decoding and reencoding\n" +
-                                        "     -sslOff: perform ssl off-loading (ie connect to the target via SSL, and expose a decrypted port)\n" +
-                                        "     -sslCn: CN to use in the generated SSL certificate (defaults to <target_host>)\n" +
-                                        "     -regCA: register self-signed certificate CA\n\n"
+                var version = Assembly.GetEntryAssembly()
+                                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                                .InformationalVersion
+                                .ToString();
+                var versionLine = $"tcpmux - version {version}";
+                Console.Error.WriteLine(
+                    new string('-', versionLine.Length) + "\n" +
+                    versionLine + "\n" +
+                    new string('-', versionLine.Length) + "\n\n" +
+                    "Usage: tcpmux [options] <listen_port> <target_host> <target_port>\n\n" +
+                    "options:\n" +
+                    "   -v: Verbose mode; display traffic\n" +
+                    "   -hex: Hex mode; display traffic as hex dump\n" +
+                    "   -text: Text mode; display traffic as text dump\n" +
+                    "   -ssl: perform ssl decoding and reencoding\n" +
+                    "   -sslOff: perform ssl off-loading (ie connect to the target via SSL, and expose a decrypted port)\n" +
+                    "   -sslCn: CN to use in the generated SSL certificate (defaults to <target_host>)\n" +
+                    "   -regCA: register self-signed certificate CA\n\n"
                 );
                 return 1;
             }
