@@ -2,6 +2,8 @@
 
 TCP Mux is a TCP router that supports optional SSL re-encryption and offloading
 
+[![Build Status](https://dev.azure.com/nicodeslandes/TcpMux/_apis/build/status/nicodeslandes.TcpMux)](https://dev.azure.com/nicodeslandes/TcpMux/_build/latest?definitionId=1)
+
 ## Usage
 
 ```

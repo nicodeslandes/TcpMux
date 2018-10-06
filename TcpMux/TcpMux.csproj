@@ -8,9 +8,7 @@
     <Description>TCP Multiplexer; provide simple routing of TCP traffic as well as SSL re-encryption and off-loading</Description>
     <Company>Triskel Software</Company>
     <Product>tcpmux</Product>
-    <Copyright>Copyright © 2018</Copyright>
-    <Version>1.0.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Copyright>Copyright © 2018</Copyright>    
   </PropertyGroup>
   
   <PropertyGroup Condition="'$(TargetFramework)'!='net452'">
