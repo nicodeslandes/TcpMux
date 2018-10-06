@@ -1,10 +1,13 @@
 name: $(Year:yy)$(DayOfYear)$(Rev:.r)
+pool:
+  vmImage: 'Ubuntu 16.04'
+  buildConfiguration: 'Release'
 
 variables:
   version: 1.0
 
 steps:
-- script: dotnet pack TcpMux/TcpMux.csproj -p:Version=$(version).$(Build.BuildNumber) -p:TargetFrameworks=netcoreapp2.1 -o $(Build.ArtifactStagingDirectory)
+- script: dotnet pack TcpMux/TcpMux.csproj -p:Version=$(version).$(Build.BuildNumber) -p:TargetFrameworks=netcoreapp2.1 -p:Configuration=$(buildConfiguration) -o $(Build.ArtifactStagingDirectory)
   displayName: 'Build package'
 
 - task: PublishBuildArtifacts@1
