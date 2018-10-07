@@ -1,23 +1,24 @@
-FROM microsoft/dotnet:2.1-aspnetcore-runtime AS base
+FROM microsoft/dotnet:2.1-runtime AS base
 WORKDIR /app
 EXPOSE 80
 
 FROM microsoft/dotnet:2.1-sdk AS build
 WORKDIR /src
-COPY TcpMux.csproj .
+COPY TcpMux/TcpMux.csproj TcpMux/
 
-#RUN dotnet restore
-COPY * ./
-RUN ls
-WORKDIR /src
+RUN dotnet restore TcpMux/TcpMux.csproj
+COPY . .
+WORKDIR /src/TcpMux
 
-ARG VERSION
-RUN echo Building version $VERSION
-RUN dotnet build -c Release -f netcoreapp2.1 -p:Version=$VERSION -o /app
+ARG VERSION=1.0.0.0
+ARG CONFIGURATION=Debug
+RUN echo Building version $VERSION && \
+	dotnet build TcpMux.csproj -c $CONFIGURATION -f netcoreapp2.1 -p:Version=$VERSION -o /app
 
 FROM build AS publish
-ARG VERSION
-RUN dotnet publish -c Release -f netcoreapp2.1 -p:Version=$VERSION --no-build -o /app
+ARG VERSION=1.0.0.0
+ARG CONFIGURATION=Debug
+RUN dotnet publish TcpMux.csproj -c $CONFIGURATION -f netcoreapp2.1 -p:Version=$VERSION --no-build -o /app
 
 FROM base AS final
 WORKDIR /app
