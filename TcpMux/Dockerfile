@@ -4,16 +4,20 @@ EXPOSE 80
 
 FROM microsoft/dotnet:2.1-sdk AS build
 WORKDIR /src
-COPY ["TcpMux/TcpMux.csproj", "TcpMux/"]
+COPY TcpMux.csproj .
 
-ENV PROJECT_DIR TcpMux
-RUN dotnet restore "$PROJECT_DIR/TcpMux.csproj"
-COPY . .
-WORKDIR "/src/TcpMux"
-RUN dotnet build "TcpMux.csproj" -c Release -o /app
+#RUN dotnet restore
+COPY * ./
+RUN ls
+WORKDIR /src
+
+ARG VERSION
+RUN echo Building version $VERSION
+RUN dotnet build -c Release -f netcoreapp2.1 -p:Version=$VERSION -o /app
 
 FROM build AS publish
-RUN dotnet publish "TcpMux.csproj" -c Release -f netcoreapp2.1 -o /app
+ARG VERSION
+RUN dotnet publish -c Release -f netcoreapp2.1 -p:Version=$VERSION --no-build -o /app
 
 FROM base AS final
 WORKDIR /app
