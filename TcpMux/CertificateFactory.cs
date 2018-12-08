@@ -15,7 +15,7 @@ using Org.BouncyCastle.X509;
 
 namespace TcpMux
 {
-    class CertificateFactory
+    internal class CertificateFactory
     {
         public const string TcpMuxCASubject = "DO_NOT_TRUST__TCPMUX_CA";
         public static readonly string TcpMuxCASubjectDN = $"CN={TcpMuxCASubject}";
@@ -121,7 +121,7 @@ namespace TcpMux
 
         public static void AddCertToStore(X509Certificate2 cert, StoreName st, StoreLocation sl)
         {
-            X509Store store = new X509Store(st, sl);
+            var store = new X509Store(st, sl);
             store.Open(OpenFlags.ReadWrite);
             store.Add(cert);
 

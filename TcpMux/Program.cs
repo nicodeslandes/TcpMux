@@ -12,16 +12,15 @@ using System.Threading.Tasks;
 
 namespace TcpMux
 {
-    class Program
+    internal class Program
     {
-        static bool Verbose = false;
-        static bool Ssl = false;
-        static bool SslOffload = false;
-        static bool DumpHex = false;
-        static bool DumpText = false;
-        static string SslCn = null;
-
-        static readonly RemoteCertificateValidationCallback ServerCertificateValidationCallback =
+        private static bool Verbose = false;
+        private static bool Ssl = false;
+        private static bool SslOffload = false;
+        private static bool DumpHex = false;
+        private static bool DumpText = false;
+        private static string SslCn = null;
+        private static readonly RemoteCertificateValidationCallback ServerCertificateValidationCallback =
             (object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors sslPolicyErrors) =>
         {
             LogVerbose($"Validating certificate from {cert.Subject}");
@@ -48,7 +47,7 @@ namespace TcpMux
         {
             var remainingArgs = new List<string>();
 
-            for (int i = 0;i < args.Length; i++)
+            for (var i = 0; i < args.Length; i++)
             {
                 var arg = args[i];
                 if (arg[0] != '-')
@@ -115,9 +114,9 @@ namespace TcpMux
                 return 1;
             }
 
-            int listenPort = int.Parse(remainingArgs[0]);
-            string targetHost = remainingArgs[1];
-            int targetPort = int.Parse(remainingArgs[2]);
+            var listenPort = int.Parse(remainingArgs[0]);
+            var targetHost = remainingArgs[1];
+            var targetPort = int.Parse(remainingArgs[2]);
 
             Log($"Preparing message routing to {targetHost}:{targetPort}");
             Log($"Opening local port {listenPort}...", addNewLine: false);
@@ -178,7 +177,7 @@ namespace TcpMux
                 Log($"New client connection: {client.Client.RemoteEndPoint}");
                 Console.Write($"Opening connection to {targetHost}:{targetPort}...");
 
-                var target = new TcpClient(targetHost, targetPort) {NoDelay = true};
+                var target = new TcpClient(targetHost, targetPort) { NoDelay = true };
                 Log($" opened target connection: {target.Client.RemoteEndPoint}");
 
                 Stream sourceStream = client.GetStream();
