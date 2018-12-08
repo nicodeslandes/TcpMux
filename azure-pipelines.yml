@@ -7,7 +7,10 @@ variables:
   buildConfiguration: 'Release'
 
 steps:
-- script: dotnet pack TcpMux/TcpMux.csproj -p:Version=$(version).$(Build.BuildNumber) -p:TargetFrameworks=netcoreapp2.1 -p:Configuration=$(buildConfiguration) -o $(Build.ArtifactStagingDirectory)
+- script: wget https://download.visualstudio.microsoft.com/download/pr/9f071c35-36b4-48c9-bcc2-b381ecb6cada/5be4784f19c28cb58f8c79219347201a/dotnet-sdk-3.0.100-preview-009812-linux-x64.tar.gz && mkdir -p $HOME/dotnet && tar zxf dotnet-sdk-3.0.100-preview-009812-linux-x64.tar.gz -C $HOME/dotnet
+  displayName: 'Installing .NET Core 3.0 SDK'
+
+- script: DOTNET_ROOT=$HOME/dotnet PATH=$HOME/dotnet:$PATH dotnet pack TcpMux/TcpMux.csproj -p:Version=$(version).$(Build.BuildNumber) -p:TargetFrameworks=netcoreapp2.1 -p:Configuration=$(buildConfiguration) -o $(Build.ArtifactStagingDirectory)
   displayName: 'Build package'
 
 - task: PublishBuildArtifacts@1
