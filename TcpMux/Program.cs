@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -45,9 +44,9 @@ namespace TcpMux
                 Console.Write($"{timestamp} {message}");
         }
 
-        static int Main(string[] args)
+        public static int Main(string[] args)
         {
-            List<string> remainingArgs = new List<string>();
+            var remainingArgs = new List<string>();
 
             for (int i = 0;i < args.Length; i++)
             {
@@ -127,7 +126,7 @@ namespace TcpMux
             listener.Start();
             Console.WriteLine(" done");
 
-            X509Certificate2 certificate = null;
+            X509Certificate2? certificate = null;
             if (Ssl)
             {
                 certificate = CertificateFactory.GetCertificateForSubject(SslCn ?? targetHost);

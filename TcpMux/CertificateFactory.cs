@@ -21,12 +21,11 @@ namespace TcpMux
         public static readonly string TcpMuxCASubjectDN = $"CN={TcpMuxCASubject}";
         public static bool Verbose { get; set; }
 
-        public static X509Certificate2 GenerateCertificate(string subjectName, X509Certificate2 issuerCertificate = null,
+        public static X509Certificate2 GenerateCertificate(string subjectName, X509Certificate2? issuerCertificate = null,
             bool generateCA = false, int keyStrength = 2048)
         {
-            var signWithCA = issuerCertificate != null;
             if (Verbose)
-                Console.WriteLine($"Generating {(signWithCA ? "" : "self-signed ")}certificate for {subjectName}");
+                Console.WriteLine($"Generating {(issuerCertificate != null ? "" : "self-signed ")}certificate for {subjectName}");
 
             // Generating Random Numbers
             var randomGenerator = new CryptoApiRandomGenerator();
@@ -36,7 +35,7 @@ namespace TcpMux
             var certificateGenerator = new X509V3CertificateGenerator();
 
             // Serial Number
-            var serialNumber = BigIntegers.CreateRandomInRange(BigInteger.One, BigInteger.ValueOf(Int64.MaxValue), random);
+            var serialNumber = BigIntegers.CreateRandomInRange(BigInteger.One, BigInteger.ValueOf(long.MaxValue), random);
             certificateGenerator.SetSerialNumber(serialNumber);
 
             // Signature Algorithm
@@ -44,7 +43,7 @@ namespace TcpMux
 
             // Issuer and Subject Name
             var subjectDN = new X509Name(subjectName);
-            var issuerDN = signWithCA ? new X509Name(issuerCertificate.Subject) : subjectDN;
+            var issuerDN = issuerCertificate != null ? new X509Name(issuerCertificate.Subject) : subjectDN;
             certificateGenerator.SetIssuerDN(issuerDN);
             certificateGenerator.SetSubjectDN(subjectDN);
 
@@ -73,7 +72,7 @@ namespace TcpMux
             // Generating the Certificate
             // For CA-signed certificate, we use the issuer private key, or for self-signed we use the cert's own key
             AsymmetricKeyParameter signingPrivateKey;
-            if (signWithCA)
+            if (issuerCertificate != null)
             {
                 var issuerKeyPair = DotNetUtilities.GetKeyPair(issuerCertificate.PrivateKey);
                 var issuerSerialNumber = new BigInteger(issuerCertificate.GetSerialNumber());
