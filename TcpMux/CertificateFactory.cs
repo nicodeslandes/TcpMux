@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using NLog;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
@@ -17,15 +18,16 @@ namespace TcpMux
 {
     internal class CertificateFactory
     {
+        private static readonly Logger Log = LogManager.GetCurrentClassLogger();
+
         public const string TcpMuxCASubject = "DO_NOT_TRUST__TCPMUX_CA";
         public static readonly string TcpMuxCASubjectDN = $"CN={TcpMuxCASubject}";
-        public static bool Verbose { get; set; }
 
         public static X509Certificate2 GenerateCertificate(string subjectName, X509Certificate2? issuerCertificate = null,
             bool generateCA = false, int keyStrength = 2048)
         {
-            if (Verbose)
-                Console.WriteLine($"Generating {(issuerCertificate != null ? "" : "self-signed ")}certificate for {subjectName}");
+            if (Log.IsDebugEnabled)
+                Log.Debug($"Generating {(issuerCertificate != null ? "" : "self-signed ")}certificate for {subjectName}");
 
             // Generating Random Numbers
             var randomGenerator = new CryptoApiRandomGenerator();
@@ -167,16 +169,16 @@ namespace TcpMux
             var existingCertificate = store.Certificates.Cast<X509Certificate2>()
                 .FirstOrDefault(c => c.HasPrivateKey && c.GetNameInfo(X509NameType.SimpleName, false) == subject);
 
-            if (Verbose)
+            if (Log.IsDebugEnabled)
             {
                 if (existingCertificate == null)
                 {
-                    Console.WriteLine($"No existing certificate for subject {subject} found in the current user's " +
+                    Log.Debug($"No existing certificate for subject {subject} found in the current user's " +
                                       "certificate store; generating a new certificate now");
                 }
                 else
                 {
-                    Console.WriteLine($"Successfully loaded certificate for subject {subject} found in the current " +
+                    Log.Debug($"Successfully loaded certificate for subject {subject} found in the current " +
                                       $"user's certificate store: " +
                                       $"{existingCertificate.Subject}");
                 }

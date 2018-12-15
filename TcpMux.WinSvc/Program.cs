@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.ServiceProcess;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
+using System.Reactive.Disposables;
 using Topshelf;
 
 namespace TcpMux.WinSvc
@@ -15,29 +12,70 @@ namespace TcpMux.WinSvc
         /// </summary>
         static void Main(string[] args)
         {
-            var rc = HostFactory.Run(x =>
-            {
-                x.Service<TcpMux.Program>(s =>
-                {
-                    s.ConstructUsing(name => new TcpMux.Program());
-                    s.WhenStarted(tc => TcpMux.Program.Main(args));
-                    s.WhenStopped(tc => { });
-                });
-                x.RunAsLocalSystem();
+            Console.WriteLine("Starting Windows service");
+            var logDisposables = new SerialDisposable();
+            //var logWriter = new TextWriter())
+            //Console.SetOut()
 
-                x.EnableServiceRecovery(r =>
+            TopshelfExitCode rc;
+            using (logDisposables)
+            {
+                rc = HostFactory.Run(x =>
                 {
-                    r.RestartService(0);
-                    r.RestartService(1);
+                    Console.WriteLine(1);
+                    x.Service((Action<Topshelf.ServiceConfigurators.ServiceConfigurator<TcpMux.Program>>)(s =>
+                    {
+                        Console.WriteLine(2);
+                        s.ConstructUsing(name =>
+                        {
+                            logDisposables.Disposable = RedirectOutToLogfiles();
+                            return new TcpMux.Program();
+                        });
+
+                        s.WhenStarted(tc => TcpMux.Program.Main(args));
+                        s.WhenStopped(tc => { });
+                    }));
+                    x.RunAsLocalSystem();
+
+                    x.EnableServiceRecovery(r =>
+                    {
+                        r.RestartService(0);
+                        r.RestartService(1);
+                    });
+
+                    x.SetDescription("Tcp Multiplexer service");
+                    x.SetDisplayName("TcpMux");
+                    x.SetServiceName("TcpMux");
+
                 });
-                
-                x.SetDescription("Tcp Multiplexer service");
-                x.SetDisplayName("TcpMux");
-                x.SetServiceName("TcpMux");
-            });
+            }
 
             var exitCode = (int)Convert.ChangeType(rc, rc.GetTypeCode());
+            Console.WriteLine($"Leaving; exit code: {rc}");
+
             Environment.ExitCode = exitCode;
+            Console.WriteLine($"Leaving; exit code: {rc}");
+        }
+
+        private static IDisposable RedirectOutToLogfiles()
+        {
+            var disposable = new CompositeDisposable();
+            var logDirectoryPath = Path.Combine(Environment.GetEnvironmentVariable("TEMP"), "TcpMux");
+            if (!Directory.Exists(logDirectoryPath)) Directory.CreateDirectory(logDirectoryPath);
+            var logFile = Path.Combine(logDirectoryPath, "tcpmux.log");
+            Console.WriteLine($"Redirecting logs to {logFile}");
+
+            TextWriter NewTextWriter()
+            {
+                var writer = File.AppendText(logFile);
+                disposable.Add(writer);
+                return writer;
+            }
+
+            Console.SetOut(NewTextWriter());
+            Console.SetError(NewTextWriter());
+
+            return disposable;
         }
     }
 }
