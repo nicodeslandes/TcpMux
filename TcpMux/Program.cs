@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace TcpMux
@@ -45,6 +46,8 @@ namespace TcpMux
 
         public static int Main(string[] args)
         {
+            Console.WriteLine("Press Enter to continue");
+            Console.ReadLine();
             var remainingArgs = new List<string>();
 
             for (var i = 0; i < args.Length; i++)
