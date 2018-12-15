@@ -10,8 +10,8 @@
 
         public bool RegisterCACert = false;
 
-        public string TargetHost { get; internal set; }
-        public ushort TargetPort { get; internal set; }
-        public ushort ListenPort { get; internal set; }
+        public string TargetHost { get; set; }
+        public ushort TargetPort { get;  set; }
+        public ushort ListenPort { get; set; }
     }
 }

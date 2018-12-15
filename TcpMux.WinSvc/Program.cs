@@ -1,6 +1,9 @@
 ﻿using System;
 using System.IO;
 using System.Reactive.Disposables;
+using NLog;
+using NLog.Config;
+using NLog.Targets;
 using Topshelf;
 
 namespace TcpMux.WinSvc
@@ -17,24 +20,45 @@ namespace TcpMux.WinSvc
             //var logWriter = new TextWriter())
             //Console.SetOut()
 
+            LoggingConfiguration loggingConfig = new LoggingConfiguration();
+
+
             TopshelfExitCode rc;
             using (logDisposables)
             {
                 rc = HostFactory.Run(x =>
                 {
                     Console.WriteLine(1);
-                    x.Service((Action<Topshelf.ServiceConfigurators.ServiceConfigurator<TcpMux.Program>>)(s =>
+                    x.Service<TcpMuxServer>(s =>
                     {
                         Console.WriteLine(2);
                         s.ConstructUsing(name =>
                         {
-                            logDisposables.Disposable = RedirectOutToLogfiles();
-                            return new TcpMux.Program();
+                            //logDisposables.Disposable = RedirectOutToLogfiles();
+                            var logDirectoryPath = GetLogDirectory();
+                            var logFile = Path.Combine(logDirectoryPath, $"tcpmux{name}.log");
+
+                            var fileTarget = new FileTarget("fileTarget")
+                            {
+                                FileName = logFile,
+                                Layout = "${longdate} ${level} ${message}  ${exception}"
+                            };
+                            loggingConfig.AddTarget(fileTarget);
+
+                            LogManager.Configuration = loggingConfig;
+                            var options = new TcpMuxOptions
+                            {
+                                TargetHost = "www.wikipedia.com",
+                                ListenPort = 8080,
+                                TargetPort = 443
+                            };
+                            return new TcpMuxServer(options);
                         });
 
-                        s.WhenStarted(tc => TcpMux.Program.Main(args));
-                        s.WhenStopped(tc => { });
-                    }));
+                        s.WhenStarted(ts => ts.Start());
+                        s.WhenStopped(ts => ts.Stop());
+                    });
+
                     x.RunAsLocalSystem();
 
                     x.EnableServiceRecovery(r =>
@@ -57,25 +81,11 @@ namespace TcpMux.WinSvc
             Console.WriteLine($"Leaving; exit code: {rc}");
         }
 
-        private static IDisposable RedirectOutToLogfiles()
+        private static string GetLogDirectory()
         {
-            var disposable = new CompositeDisposable();
             var logDirectoryPath = Path.Combine(Environment.GetEnvironmentVariable("TEMP"), "TcpMux");
             if (!Directory.Exists(logDirectoryPath)) Directory.CreateDirectory(logDirectoryPath);
-            var logFile = Path.Combine(logDirectoryPath, "tcpmux.log");
-            Console.WriteLine($"Redirecting logs to {logFile}");
-
-            TextWriter NewTextWriter()
-            {
-                var writer = File.AppendText(logFile);
-                disposable.Add(writer);
-                return writer;
-            }
-
-            Console.SetOut(NewTextWriter());
-            Console.SetError(NewTextWriter());
-
-            return disposable;
+            return logDirectoryPath;
         }
     }
 }
