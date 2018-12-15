@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace TcpMux
 {
-    internal class Program
+    public class Program
     {
         private static bool Verbose = false;
         private static bool Ssl = false;
@@ -125,7 +125,7 @@ namespace TcpMux
             listener.Start();
             Console.WriteLine(" done");
 
-            X509Certificate2? certificate = null;
+            X509Certificate2 certificate = null;
             if (Ssl)
             {
                 certificate = CertificateFactory.GetCertificateForSubject(SslCn ?? targetHost);
