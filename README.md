@@ -4,6 +4,14 @@ TCP Mux is a TCP router that supports optional SSL re-encryption and offloading
 
 [![Build Status](https://dev.azure.com/nicodeslandes/TcpMux/_apis/build/status/nicodeslandes.TcpMux)](https://dev.azure.com/nicodeslandes/TcpMux/_build/latest?definitionId=1)
 
+## Installation
+
+`TcpMux` can be installed as a [.NET Core global tool](https://docs.microsoft.com/en-us/dotnet/core/tools/global-tools). To set it up, install the latest [.NET Core SDK](https://dotnet.microsoft.com/download), and run:
+```
+dotnet tool install -g tcpmux
+```
+This will allow you to launch `TcpMux` directly on the command line by entering `tcpmux`.
+
 ## Usage
 
 ```
