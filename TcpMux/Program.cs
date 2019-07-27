@@ -46,8 +46,6 @@ namespace TcpMux
 
         public static int Main(string[] args)
         {
-            Console.WriteLine("Press Enter to continue");
-            Console.ReadLine();
             var remainingArgs = new List<string>();
 
             for (var i = 0; i < args.Length; i++)
