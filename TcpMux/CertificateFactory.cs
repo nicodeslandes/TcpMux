@@ -23,7 +23,7 @@ namespace TcpMux
         public const string TcpMuxCASubject = "DO_NOT_TRUST__TCPMUX_CA";
         public static readonly string TcpMuxCASubjectDN = $"CN={TcpMuxCASubject}";
 
-        public static X509Certificate2 GenerateCertificate(string subjectName, X509Certificate2? issuerCertificate = null,
+        public static X509Certificate2 GenerateCertificate(string subjectName, X509Certificate2 issuerCertificate = null,
             bool generateCA = false, int keyStrength = 2048)
         {
             if (Log.IsDebugEnabled)

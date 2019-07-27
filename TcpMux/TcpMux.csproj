@@ -35,7 +35,7 @@
   <!-- For the .NET Framework 4.5 Release build, use ILRepack to generate a single exe -->
   <PropertyGroup>
     <ILRepackConsolePath>$(NuGetPackageRoot)ilrepack/2.0.16/tools/ILRepack.exe</ILRepackConsolePath>
-    <LangVersion>8.0</LangVersion>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
   <Target Name="ILRepack" AfterTargets="Build" Condition="'$(TargetFramework)' == 'net452' AND '$(Configuration)' == 'Release'">
