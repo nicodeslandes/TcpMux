@@ -37,7 +37,7 @@ namespace TcpMux
             Log.Info($"Preparing message routing to {options.TargetHost}:{options.TargetPort}");
             Log.Info($"Opening local port {options.ListenPort}...");
             var listener = new TcpListener(IPAddress.Any, options.ListenPort);
-            listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, false);
+            listener.Server.LingerState = new LingerOption(enable: false, seconds: 0);
             listener.Start();
             Log.Info("Port open");
 
