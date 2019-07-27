@@ -163,7 +163,7 @@ namespace TcpMux
                 subject == TcpMuxCASubject
                 ? new X509Store(StoreName.Root, StoreLocation.CurrentUser)
                 : new X509Store(StoreLocation.CurrentUser);
-            store.Open(OpenFlags.OpenExistingOnly);
+            store.Open(OpenFlags.ReadOnly);
             var existingCertificate = store.Certificates.Cast<X509Certificate2>()
                 .FirstOrDefault(c => c.HasPrivateKey && c.GetNameInfo(X509NameType.SimpleName, false) == subject);
 

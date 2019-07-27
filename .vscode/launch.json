@@ -10,7 +10,7 @@
             "request": "launch",
             "preLaunchTask": "publish",
             "program": "/mnt/c/Projects/GitHub/TcpMux/bin/publish/TcpMux.dll",
-            "args": ["-sslOff", "-hex", "8080", "www.google.co.uk", "443"],
+            "args": ["-ssl", "-hex", "8080", "www.google.co.uk", "443"],
             "stopAtEntry": false,
             "console": "internalConsole",
             "pipeTransport": {
