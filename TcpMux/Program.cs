@@ -124,7 +124,7 @@ namespace TcpMux
             Log($"Preparing message routing to {targetHost}:{targetPort}");
             Log($"Opening local port {listenPort}...", addNewLine: false);
             var listener = new TcpListener(IPAddress.Any, listenPort);
-            listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, false);
+            listener.Server.LingerState = new LingerOption(enable: false, seconds: 0);
             listener.Start();
             Console.WriteLine(" done");
 

@@ -10,6 +10,19 @@
                 "${workspaceFolder}/TcpMux/TcpMux.csproj"
             ],
             "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "publish",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "publish",
+                "${workspaceFolder}/TcpMux/TcpMux.csproj",
+                "-f",
+                "netcoreapp2.1",
+                "-o",
+                "${workspaceFolder}/bin/publish"
+            ]
         }
     ]
 }

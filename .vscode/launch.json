@@ -5,18 +5,39 @@
    "version": "0.2.0",
    "configurations": [
         {
+            "name": ".NET Core WSL Launch",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "publish",
+            "program": "/mnt/c/Projects/GitHub/TcpMux/bin/publish/TcpMux.dll",
+            "args": ["-sslOff", "-hex", "8080", "www.google.co.uk", "443"],
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "pipeTransport": {
+                "pipeCwd": "${workspaceRoot}",
+                "pipeProgram": "bash.exe",
+                "pipeArgs": [ "-c" ],
+                "debuggerPath": "~/vsdbg/vsdbg"
+            }
+        },
+        {
             "name": ".NET Core Launch (console)",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
             // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/TcpMux/bin/Debug/netcoreapp2.1/TcpMux.dll",
+            "program": "${workspaceFolder}/TcpMux/bin/publish/TcpMux.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/TcpMux",
+            "cwd": "${workspaceFolder}/TcpMux/bin/publish",
             // For more information about the 'console' field, see https://github.com/OmniSharp/omnisharp-vscode/blob/master/debugger-launchjson.md#console-terminal-window
             "console": "internalConsole",
             "stopAtEntry": false,
-            "internalConsoleOptions": "openOnSessionStart"
+            "internalConsoleOptions": "openOnSessionStart",
+            "linux": {
+                "logging": {
+                    "engineLogging": true
+                }
+            }
         },
         {
             "name": ".NET Core Attach",
