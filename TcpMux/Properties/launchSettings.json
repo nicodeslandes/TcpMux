@@ -1,12 +1,15 @@
 {
   "profiles": {
     "TcpMux": {
-      "commandName": "Project",
+      "commandName": "Docker",
       "commandLineArgs": "-v -text -ssl -sslCn *.wikipedia.org 443 91.198.174.192 443"
     },
     "RegCA": {
       "commandName": "Project",
       "commandLineArgs": "-v -regCA"
+    },
+    "Wsl": {
+      "commandName": "Docker"
     }
   }
 }
