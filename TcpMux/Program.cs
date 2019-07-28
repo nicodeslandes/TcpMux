@@ -19,7 +19,7 @@ namespace TcpMux
         private static bool SslOffload = false;
         private static bool DumpHex = false;
         private static bool DumpText = false;
-        private static string SslCn = null;
+        private static string? SslCn = null;
         private static readonly RemoteCertificateValidationCallback ServerCertificateValidationCallback =
             (object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors sslPolicyErrors) =>
         {
@@ -169,7 +169,7 @@ namespace TcpMux
         }
 
         private static async void HandleClientConnection(TcpClient client, string targetHost, int targetPort,
-            X509Certificate2 certificate)
+            X509Certificate2? certificate)
         {
             try
             {

@@ -133,7 +133,7 @@ namespace TcpMux
 
         public static X509Certificate2 GetCertificateForSubject(string subject)
         {
-            if (!_certificateCache.TryGetValue(subject, out var cert))
+            if (!_certificateCache.TryGetValue(subject, out X509Certificate2? cert))
             {
                 cert = LoadExistingPrivateKeyCertificate(subject);
 
@@ -157,7 +157,7 @@ namespace TcpMux
             return cert;
         }
 
-        private static X509Certificate2 LoadExistingPrivateKeyCertificate(string subject)
+        private static X509Certificate2? LoadExistingPrivateKeyCertificate(string subject)
         {
             var store =
                 subject == TcpMuxCASubject
