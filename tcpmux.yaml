@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tcpmux
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tcpmux
+  template:
+    metadata:
+      labels:
+        app: tcpmux
+    spec:
+      nodeSelector:
+        "beta.kubernetes.io/os": linux
+      containers:
+      - name: tcpmux
+        image: ndeslandes/tcpmux
+        args: ["-text", "-sslOff", "8080", "www.wikimedia.org", "443"]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        ports:
+        - containerPort: 8080
+          name: tcpmux
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tcpmux
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+  selector:
+    app: tcpmux
