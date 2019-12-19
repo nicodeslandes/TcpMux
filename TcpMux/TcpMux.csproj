@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>netcoreapp2.1;net452</TargetFrameworks>
+    <TargetFrameworks>netcoreapp3.1;net452</TargetFrameworks>
 
     <Title>tcpmux</Title>
     <Description>TCP Multiplexer; provide simple routing of TCP traffic as well as SSL re-encryption and off-loading</Description>
