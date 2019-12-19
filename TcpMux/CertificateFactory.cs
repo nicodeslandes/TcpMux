@@ -15,7 +15,7 @@ using Org.BouncyCastle.X509;
 
 namespace TcpMux
 {
-    internal class CertificateFactory
+    public class CertificateFactory
     {
         public const string TcpMuxCASubject = "DO_NOT_TRUST__TCPMUX_CA";
         public static readonly string TcpMuxCASubjectDN = $"CN={TcpMuxCASubject}";
