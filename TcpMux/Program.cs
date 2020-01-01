@@ -27,7 +27,7 @@ namespace TcpMux
                     throw new InvalidOperationException("Incorrect parsing result");
             }
 
-            if (options.RegisterCACert)
+            if (options.RunningMode == RunningMode.RegisterCACert)
             {
                 RegisterCACert();
                 return 0;
