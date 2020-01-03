@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
@@ -18,7 +19,6 @@ namespace TcpMux
     public class CertificateFactory
     {
         public const string TcpMuxCASubject = "DO_NOT_TRUST__TCPMUX_CA";
-        public static readonly string TcpMuxCASubjectDN = $"CN={TcpMuxCASubject}";
         public static bool Verbose { get; set; }
 
         public static X509Certificate2 GenerateCertificate(string subjectName, X509Certificate2? issuerCertificate = null,
@@ -42,10 +42,15 @@ namespace TcpMux
             const string signatureAlgorithm = "SHA256WithRSA";
 
             // Issuer and Subject Name
-            var subjectDN = new X509Name(subjectName);
+            var subjectDN = new X509Name($"CN={subjectName}");
             var issuerDN = issuerCertificate != null ? new X509Name(issuerCertificate.Subject) : subjectDN;
             certificateGenerator.SetIssuerDN(issuerDN);
             certificateGenerator.SetSubjectDN(subjectDN);
+
+            // Subject Alternative Name 
+            var altName = new GeneralName(GeneralName.DnsName, subjectName);
+            var subjectAltName = new GeneralNames(altName);
+            certificateGenerator.AddExtension(X509Extensions.SubjectAlternativeName, false, subjectAltName);
 
             // Valid For the next 2 year
             var notBefore = DateTime.UtcNow.Date;
@@ -142,12 +147,12 @@ namespace TcpMux
                     // Special case: if we're generating the TCP Mux CA, make a self-signed CA cert
                     if (subject == TcpMuxCASubject)
                     {
-                        cert = GenerateCertificate(TcpMuxCASubjectDN, generateCA: true);
+                        cert = GenerateCertificate(TcpMuxCASubject, generateCA: true);
                     }
                     else
                     {
                         var tcpMuxCACert = GetCertificateForSubject(TcpMuxCASubject);
-                        cert = GenerateCertificate($"CN={subject}", tcpMuxCACert);
+                        cert = GenerateCertificate(subject, tcpMuxCACert);
                     }
                 }
 

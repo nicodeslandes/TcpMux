@@ -7,6 +7,10 @@
     "RegCA": {
       "commandName": "Project",
       "commandLineArgs": "-v -regCA"
+    },
+    "TcpMux SNI": {
+      "commandName": "Project",
+      "commandLineArgs": "-v -ssl -sni -l 443"
     }
   }
 }

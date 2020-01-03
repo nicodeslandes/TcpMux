@@ -10,8 +10,9 @@
         public bool DumpHex { get; set; }
         public bool DumpText { get; set; }
         public ushort ListenPort { get; set; }
-        public string? TargetHost { get; set; }
-        public ushort TargetPort { get; set; }
+        public string? Target { get; set; }
+        public bool SniRouting { get; set; }
+        public bool ForceDnsResolution { get; set; }
     }
 
     public enum RunningMode

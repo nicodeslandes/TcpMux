@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using TcpMux.Options;
@@ -9,33 +10,50 @@ namespace TcpMux
     {
         public static int Main(string[] args)
         {
+            if (!TryParseArguments(args, out var options))
+            {
+                return 1;
+            }
+
+            switch (options.RunningMode)
+            {
+                case RunningMode.RegisterCACert:
+                    RegisterCACert();
+                    break;
+                case RunningMode.Client:
+                case null:
+                    var runner = new TcpMuxRunner(options);
+                    runner.Run();
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unsupported running mode: {options.RunningMode}");
+                    return 1;
+            }
+
+            return 0;
+        }
+
+        private static bool TryParseArguments(string[] args,
+            [NotNullWhen(returnValue: true)]out TcpMuxOptions? options)
+        {
             var argumentParser = new ArgumentParser();
-            TcpMuxOptions options;
 
             switch (argumentParser.ParseArguments(args))
             {
                 case ParsingSuccess(var o):
                     options = o;
-                    break;
+                    return true;
                 case ArgumentParsingError(var error):
                     Console.WriteLine("Incorrect arguments: {0}", error);
-                    return 1;
+                    options = null;
+                    return false;
                 case NotEnoughArguments _:
                     ShowUsage();
-                    return 1;
+                    options = null;
+                    return false;
                 default:
                     throw new InvalidOperationException("Incorrect parsing result");
             }
-
-            if (options.RunningMode == RunningMode.RegisterCACert)
-            {
-                RegisterCACert();
-                return 0;
-            }
-
-            var runner = new TcpMuxRunner(options);
-            runner.Run();
-            return 0;
         }
 
         private static void RegisterCACert()
@@ -47,7 +65,7 @@ namespace TcpMux
             {
                 Console.WriteLine("Generating CA Certificate...");
                 var cert =
-                    CertificateFactory.GenerateCertificate(CertificateFactory.TcpMuxCASubjectDN, generateCA: true);
+                    CertificateFactory.GenerateCertificate(CertificateFactory.TcpMuxCASubject, generateCA: true);
                 Console.WriteLine("Registering certificate in current user store");
 
                 // Add CA certificate to Root store
@@ -73,6 +91,9 @@ namespace TcpMux
                 new string('-', versionLine.Length) + "\n\n" +
                 "Usage: tcpmux [options] <listen_port> <target_host> <target_port>\n\n" +
                 "options:\n" +
+                "   -v: Verbose mode; display traffic\n" +
+                "   -l <port>: Port to open\n" +
+                "   -t <host>[:<port>]: Target; if port is omitted, defaults to the listening port\n" +
                 "   -v: Verbose mode; display traffic\n" +
                 "   -hex: Hex mode; display traffic as hex dump\n" +
                 "   -text: Text mode; display traffic as text dump\n" +
