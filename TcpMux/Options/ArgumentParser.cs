@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Reflection;
+using System.Net;
 
 namespace TcpMux.Options
 {
@@ -19,6 +19,17 @@ namespace TcpMux.Options
             try
             {
                 ReadArguments();
+
+                // Default the target port to the listening port
+                if (options.Target?.Port == 0)
+                {
+                    options.Target = new DnsEndPoint(options.Target.Host, options.ListenPort);
+                }
+
+                if (options.Target is null && !options.SniRouting)
+                {
+                    throw new InvalidOptionException("Please specify a target with the -t option");
+                }
             }
             catch (InvalidOptionException ex)
             {
@@ -53,7 +64,8 @@ namespace TcpMux.Options
                             options.ListenPort = ReadNextArgument<ushort>("Listen Port");
                             break;
                         case "-t":
-                            options.Target = ReadNextArgument<string>("Target");
+                            var target = ReadNextArgument<string>("Target");
+                            options.Target = ParseEndpoint(target);
                             break;
                         case "-ssl":
                             options.Ssl = true;
@@ -109,6 +121,40 @@ namespace TcpMux.Options
 
                 options.RunningMode = mode;
             }
+        }
+
+        private DnsEndPoint ParseEndpoint(string str)
+        {
+            void ThrowInvalidOptionException()
+            {
+                throw new InvalidOptionException($"Invalid value: '{str}': please use <host>[:<port>] format");
+            }
+
+            if (string.IsNullOrWhiteSpace(str))
+            {
+                ThrowInvalidOptionException();
+            }
+
+            var elements = str.Split(':');
+            if (elements.Length > 2)
+            {
+                ThrowInvalidOptionException();
+            }
+
+            if (elements.Length == 2)
+            {
+                // Parse the port
+                if (ushort.TryParse(elements[1], out var port))
+                {
+                    return new DnsEndPoint(elements[0], port);
+                }
+                else
+                {
+                    throw new InvalidOptionException($"Invalid port: {elements[1]}");
+                }
+            }
+
+            return new DnsEndPoint(elements[0], 0);
         }
     }
 }

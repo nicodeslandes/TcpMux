@@ -1,4 +1,6 @@
-﻿namespace TcpMux.Options
+﻿using System.Net;
+
+namespace TcpMux.Options
 {
     public class TcpMuxOptions
     {
@@ -10,7 +12,7 @@
         public bool DumpHex { get; set; }
         public bool DumpText { get; set; }
         public ushort ListenPort { get; set; }
-        public string? Target { get; set; }
+        public DnsEndPoint? Target { get; set; }
         public bool SniRouting { get; set; }
         public bool ForceDnsResolution { get; set; }
     }

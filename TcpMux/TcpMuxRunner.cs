@@ -8,6 +8,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using DnsClient;
+using TcpMux.Extensions;
 using TcpMux.Options;
 
 namespace TcpMux
@@ -37,15 +38,9 @@ namespace TcpMux
                 throw new InvalidOperationException("Target host cannot be null");
             }
 
-            // TODO: Make this more robust
-            var targetHost = _options.SniRouting ? "<sni>" : _options.Target!.Split(':')[0];
-            var targetPort = _options.SniRouting ? 443 : _options.Target!.Contains(":")
-                ? ushort.Parse(_options.Target.Split(':')[1])
-                : _options.ListenPort;
-
             if (!_options.SniRouting)
             {
-                Log($"Preparing message routing to {_options.Target}");
+                Log($"Preparing message routing to {_options.Target?.ToShortString()}");
             }
 
             Log($"Opening local port {_options.ListenPort}...", addNewLine: false);
@@ -57,7 +52,7 @@ namespace TcpMux
             X509Certificate2? certificate = null;
             if (_options.Ssl && !_options.SniRouting)
             {
-                certificate = CertificateFactory.GetCertificateForSubject(_options.SslCn ?? targetHost);
+                certificate = CertificateFactory.GetCertificateForSubject(_options.SslCn ?? _options.Target!.Host);
             }
 
             Task.Run(async () =>
@@ -65,7 +60,7 @@ namespace TcpMux
                 while (true)
                 {
                     var client = await listener.AcceptTcpClientAsync();
-                    HandleClientConnection(client, targetHost, targetPort, certificate);
+                    HandleClientConnection(client, certificate);
                 }
             });
 
@@ -77,16 +72,15 @@ namespace TcpMux
         }
 
 
-        private async void HandleClientConnection(TcpClient client, string targetHost, int targetPort,
-            X509Certificate2? certificate)
+        private async void HandleClientConnection(TcpClient client, X509Certificate2? certificate)
         {
             try
             {
                 client.NoDelay = true;
                 Log($"New client connection: {client.Client.RemoteEndPoint}");
-                Console.Write($"Opening connection to {targetHost}:{targetPort}...");
 
                 Stream sourceStream = client.GetStream();
+                var target = _options.Target;
 
                 if (_options.Ssl)
                 {
@@ -108,7 +102,7 @@ namespace TcpMux
                     Console.WriteLine("SNI Host: {0}", sniHost);
                     if (sniHost != null)
                     {
-                        targetHost = sniHost;
+                        target = new DnsEndPoint(sniHost, target?.Port ?? _options.ListenPort);
                     }
 #else
                     await sslSourceStream.AuthenticateAsServerAsync(certificate, false,
@@ -119,25 +113,31 @@ namespace TcpMux
                     sourceStream = sslSourceStream;
                 }
 
-                var target = ConnectToTarget(targetHost, targetPort);
-                Log($" opened target connection: {target.Client.RemoteEndPoint}");
-                Stream targetStream = target.GetStream();
+                if (target == null)
+                {
+                    Console.WriteLine($"Failed to identify a target; closing connection");
+                    client.Close();
+                    return;
+                }
 
+                var targetConnection = ConnectToTarget(target);
+                var clientRemoteEndPoint = client.Client.RemoteEndPoint;
+                var targetRemoteEndPoint = targetConnection.Client.RemoteEndPoint;
+                Log($" opened target connection: {targetRemoteEndPoint}");
+                Stream targetStream = targetConnection.GetStream();
 
                 if (_options.Ssl || _options.SslOffload)
                 {
-                    LogVerbose($"Performing SSL authentication with server {target.Client.RemoteEndPoint}");
+                    LogVerbose($"Performing SSL authentication with server {targetRemoteEndPoint}");
                     var sslTargetStream = new SslStream(targetStream, false, ValidateCertificate);
-                    await sslTargetStream.AuthenticateAsClientAsync(targetHost, null, SslProtocols.Tls12, false);
-                    LogVerbose($"SSL authentication with server {target.Client.RemoteEndPoint} successful; " +
+                    await sslTargetStream.AuthenticateAsClientAsync(target.Host, null, SslProtocols.Tls12, false);
+                    LogVerbose($"SSL authentication with server {targetRemoteEndPoint} successful; " +
                                       $"server cert Subject: {sslTargetStream.RemoteCertificate?.Subject}");
                     targetStream = sslTargetStream;
                 }
 
-                RouteMessages(sourceStream, client.Client.RemoteEndPoint,
-                    targetStream, target.Client.RemoteEndPoint);
-                RouteMessages(targetStream, target.Client.RemoteEndPoint,
-                    sourceStream, client.Client.RemoteEndPoint);
+                RouteMessages(sourceStream, clientRemoteEndPoint, targetStream, targetRemoteEndPoint);
+                RouteMessages(targetStream, targetRemoteEndPoint, sourceStream, clientRemoteEndPoint);
             }
             catch (Exception ex)
             {
@@ -145,8 +145,12 @@ namespace TcpMux
             }
         }
 
-        private TcpClient ConnectToTarget(string targetHost, int targetPort)
+        private TcpClient ConnectToTarget(DnsEndPoint target)
         {
+            var targetHost = target.Host;
+            var targetPort = target.Port;
+
+            Console.Write($"Opening connection to {target.ToShortString()}...");
             if (_options.ForceDnsResolution)
             {
                 targetHost = _dnsLookupClient.Value.GetHostEntry(targetHost).AddressList[0].ToString();
