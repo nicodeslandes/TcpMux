@@ -15,6 +15,8 @@ namespace TcpMux.Options
         public DnsEndPoint? Target { get; set; }
         public bool SniRouting { get; set; }
         public bool ForceDnsResolution { get; set; }
+        public MultiplexingMode MultiplexingMode { get; set; }
+        public DnsEndPoint? MultiplexingTarget { get; set; }
     }
 
     public enum RunningMode
@@ -22,5 +24,12 @@ namespace TcpMux.Options
         Client,
         Server,
         RegisterCACert
+    }
+
+    public enum MultiplexingMode
+    {
+        None,
+        Multiplexer,
+        Demultiplexer
     }
 }
