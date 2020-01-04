@@ -2,13 +2,13 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>netcoreapp3.1;net452</TargetFrameworks>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
 
     <Title>tcpmux</Title>
     <Description>TCP Multiplexer; provide simple routing of TCP traffic as well as SSL re-encryption and off-loading</Description>
     <Company>Triskel Software</Company>
     <Product>tcpmux</Product>
-    <Copyright>Copyright © 2018</Copyright>
+    <Copyright>Copyright © 2020</Copyright>
     <Authors>Nicolas Deslandes</Authors>
 
     <PackageProjectUrl>https://github.com/nicodeslandes/TcpMux</PackageProjectUrl>
@@ -18,32 +18,17 @@
     <RepositoryUrl>https://github.com/nicodeslandes/TcpMux.git</RepositoryUrl>
   </PropertyGroup>
   
-  <PropertyGroup Condition="'$(TargetFramework)'!='net452'">
+  <PropertyGroup>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>tcpmux</ToolCommandName>
     <PackageOutputPath>./nupkg</PackageOutputPath>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="DnsClient" Version="1.2.0" />
-    <PackageReference Include="ILRepack" Version="2.0.16" Condition="'$(TargetFramework)' == 'net452'" />
-    <PackageReference Include="Nullable" Version="1.2.0" Condition="'$(TargetFramework)' == 'net452'" />
-    <PackageReference Include="System.ValueTuple" Version="4.5.0" Condition="'$(TargetFramework)' == 'net452'" />
-    <PackageReference Include="Portable.BouncyCastle" Version="1.8.3" />
-  </ItemGroup>
-
-  <!-- For the .NET Framework 4.5 Release build, use ILRepack to generate a single exe -->
-  <PropertyGroup>
-    <ILRepackConsolePath>$(NuGetPackageRoot)ilrepack/2.0.16/tools/ILRepack.exe</ILRepackConsolePath>
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
   </PropertyGroup>
 
-  <Target Name="ILRepack" AfterTargets="Build" Condition="'$(TargetFramework)' == 'net452' AND '$(Configuration)' == 'Release'">
-    <Message Text="Executing ILRepack in $(ProjectDir)" />
-    <Exec Command="$(ILRepackConsolePath) /out:$(OutDir)TcpMux.exe $(OutDir)TcpMux.exe $(OutDir)BouncyCastle.Crypto.dll" WorkingDirectory="$(ProjectDir)" />
-    
-    <!-- PDB is not usable after ILRepack does its magic, so we might as well delete it -->
-    <Delete Files="$(OutDir)$(TargetName).pdb;$(OutDir)BouncyCastle.Crypto.dll" />
-  </Target>
+  <ItemGroup>
+    <PackageReference Include="DnsClient" Version="1.2.0" />
+    <PackageReference Include="Portable.BouncyCastle" Version="1.8.3" />
+  </ItemGroup>
+
 </Project>

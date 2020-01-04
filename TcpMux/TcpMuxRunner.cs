@@ -29,6 +29,11 @@ namespace TcpMux
         {
             _options = options;
             _dnsLookupClient = new Lazy<LookupClient>(() => new LookupClient());
+
+            if (options.MultiplexingMode == MultiplexingMode.Multiplexer && options.MultiplexingTarget != null)
+            {
+                _multiplexingConnection = new MultiplexingConnection(options.MultiplexingTarget);
+            }
         }
 
         public void Run()
@@ -91,6 +96,8 @@ namespace TcpMux
                 Log($"New client connection: {client.Client.RemoteEndPoint}");
 
                 Stream sourceStream = client.GetStream();
+                var clientRemoteEndPoint = client.Client.RemoteEndPoint;
+
                 var target = _options.Target;
 
                 if (_options.Ssl)
@@ -107,14 +114,11 @@ namespace TcpMux
                     return;
                 }
 
-                var targetConnection = ConnectToTarget(target);
-                var clientRemoteEndPoint = client.Client.RemoteEndPoint;
-                var targetRemoteEndPoint = targetConnection.Client.RemoteEndPoint;
-                Stream targetStream = targetConnection.GetStream();
+                var (targetStream, targetRemoteEndPoint) = ConnectToTarget(target);
 
                 if (_options.Ssl || _options.SslOffload)
                 {
-                    targetStream = await WrapInSslStream(targetStream, target, targetRemoteEndPoint);
+                    targetStream = await HandleSslTarget(targetStream, target, targetRemoteEndPoint);
                 }
 
                 RouteMessages(sourceStream, clientRemoteEndPoint, targetStream, targetRemoteEndPoint);
@@ -133,7 +137,7 @@ namespace TcpMux
             var sslSourceStream = new SslStream(sourceStream);
 
             Log($"Performing SSL authentication with client {client.Client.RemoteEndPoint}");
-#if !NET452
+
             string? sniHost = null;
             var sslOptions = new SslServerAuthenticationOptions
             {
@@ -152,16 +156,11 @@ namespace TcpMux
                 target = new DnsEndPoint(sniHost, target?.Port ?? _options.ListenPort);
             }
 
-#else
-            await sslSourceStream.AuthenticateAsServerAsync(certificate, false,
-                SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12, false);
-#endif
-
             LogVerbose($"SSL authentication with client {client.Client.RemoteEndPoint} successful");
             return (sslSourceStream, target);
         }
 
-        private async Task<SslStream> WrapInSslStream(Stream targetStream, DnsEndPoint target,
+        private async Task<SslStream> HandleSslTarget(Stream targetStream, DnsEndPoint target,
             EndPoint targetRemoteEndPoint)
         {
             LogVerbose($"Performing SSL authentication with server {targetRemoteEndPoint}");
@@ -172,10 +171,18 @@ namespace TcpMux
             return sslTargetStream;
         }
 
-        private TcpClient ConnectToTarget(DnsEndPoint target)
+        private (Stream stream, EndPoint remoteEndPoint) ConnectToTarget(DnsEndPoint target)
         {
             var targetHost = target.Host;
             var targetPort = target.Port;
+
+            if (_options.MultiplexingMode == MultiplexingMode.Multiplexer)
+            {
+                // We're in multiplexer mode; instead of connecting to the target, we simply send a message
+                // describing the target
+                var stream = CreateMultiplexedStream();
+                return (stream, target);
+            }
 
             Console.Write($"Opening connection to {target.ToShortString()}...");
             if (_options.ForceDnsResolution)
@@ -185,7 +192,13 @@ namespace TcpMux
 
             var tcpClient = new TcpClient(targetHost, targetPort) { NoDelay = true };
             Log($" opened target connection: {tcpClient.Client.RemoteEndPoint}");
-            return tcpClient;
+            return (tcpClient.GetStream(), tcpClient.Client.RemoteEndPoint);
+        }
+
+        MultiplexingConnection? _multiplexingConnection;
+        private Stream CreateMultiplexedStream()
+        {
+            return _multiplexingConnection!.CreateMultiplexedStream();
         }
 
         private void RouteMessages(Stream source, EndPoint sourceRemoteEndPoint, Stream target,
