@@ -95,7 +95,9 @@ namespace TcpMux
 
                 if (_options.Ssl)
                 {
-                    (sourceStream, target) = await NegotiateSslConnection(sourceStream, client.Client.RemoteEndPoint);
+                    // Perform the SSL negotiation with the client, and read the target through SNI if
+                    // SNI routing is enabled
+                    (sourceStream, target) = await NegotiateSslConnection(sourceStream, client, certificate);
                 }
 
                 if (target == null)
@@ -125,12 +127,12 @@ namespace TcpMux
         }
 
         private async Task<(SslStream stream, DnsEndPoint? target)> NegotiateSslConnection(Stream sourceStream,
-            EndPoint clientRemoteEndPoint)
+            TcpClient client, X509Certificate2? certificate)
         {
             var target = _options.Target;
             var sslSourceStream = new SslStream(sourceStream);
 
-            Log($"Performing SSL authentication with client {clientRemoteEndPoint}");
+            Log($"Performing SSL authentication with client {client.Client.RemoteEndPoint}");
 #if !NET452
             string? sniHost = null;
             var sslOptions = new SslServerAuthenticationOptions
@@ -155,11 +157,11 @@ namespace TcpMux
                 SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12, false);
 #endif
 
-            LogVerbose($"SSL authentication with client {clientRemoteEndPoint} successful");
+            LogVerbose($"SSL authentication with client {client.Client.RemoteEndPoint} successful");
             return (sslSourceStream, target);
         }
 
-        private async Task<SslStream> WrapInSslStream(Stream targetStream, DnsEndPoint? target,
+        private async Task<SslStream> WrapInSslStream(Stream targetStream, DnsEndPoint target,
             EndPoint targetRemoteEndPoint)
         {
             LogVerbose($"Performing SSL authentication with server {targetRemoteEndPoint}");
