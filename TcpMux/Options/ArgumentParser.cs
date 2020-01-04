@@ -64,8 +64,7 @@ namespace TcpMux.Options
                             options.ListenPort = ReadNextArgument<ushort>("Listen Port");
                             break;
                         case "-t":
-                            var target = ReadNextArgument<string>("Target");
-                            options.Target = ParseEndpoint(target);
+                            options.Target = ReadNextArgument<DnsEndPoint>("Target");
                             break;
                         case "-ssl":
                             options.Ssl = true;
@@ -95,6 +94,14 @@ namespace TcpMux.Options
                             SetRunningMode(RunningMode.RegisterCACert);
                             // Skip remaining arguments
                             return;
+                        case "-mux":
+                            options.MultiplexingMode = MultiplexingMode.Multiplexer;
+                            options.MultiplexingTarget = ReadNextArgument<DnsEndPoint>("MultiplexingTarget");
+                            break;
+                        case "-demux":
+                            options.MultiplexingMode = MultiplexingMode.Demultiplexer;
+                            options.MultiplexingListeningPort = ReadNextArgument<ushort>("MultiplexingListeningPort");
+                            break;
                         default:
                             throw new InvalidOptionException($"Invalid option: {arg}");
                     }
@@ -104,6 +111,12 @@ namespace TcpMux.Options
                         if (i >= args.Length || args[++i][0] == '-')
                         {
                             throw new InvalidOptionException($"Missing {description}");
+                        }
+
+                        if (typeof(T) == typeof(DnsEndPoint))
+                        {
+                            var str = ReadNextArgument<string>(description);
+                            return (T)(object)ParseEndpoint(str);
                         }
 
                         var converter = TypeDescriptor.GetConverter(typeof(T));

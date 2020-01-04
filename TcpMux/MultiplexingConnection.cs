@@ -21,7 +21,7 @@ namespace TcpMux
         private readonly object _lock = new object();
         private int _nextStreamId = 1;
 
-        private Dictionary<int, MultiplexedStream> _multiplexedStreams = new Dictionary<int, MultiplexedStream>();
+        private readonly Dictionary<int, MultiplexedStream> _multiplexedStreams = new Dictionary<int, MultiplexedStream>();
 
         public MultiplexingConnection(DnsEndPoint multiplexerTarget)
         {

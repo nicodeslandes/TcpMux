@@ -15,16 +15,9 @@ namespace TcpMux
 {
     public class TcpMuxRunner
     {
-
-        private bool ValidateCertificate(object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-        {
-            LogVerbose($"Validating certificate from {cert.Subject}");
-            return true;
-        }
-
         private readonly TcpMuxOptions _options;
         private readonly Lazy<LookupClient> _dnsLookupClient;
-        readonly MultiplexingConnection? _multiplexingConnection;
+        private readonly MultiplexingConnection? _multiplexingConnection;
 
         public TcpMuxRunner(TcpMuxOptions options)
         {
@@ -245,6 +238,12 @@ namespace TcpMux
         {
             if (_options.Verbose)
                 Log(message, addNewLine);
+        }
+
+        private bool ValidateCertificate(object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        {
+            LogVerbose($"Validating certificate from {cert.Subject}");
+            return true;
         }
     }
 }
