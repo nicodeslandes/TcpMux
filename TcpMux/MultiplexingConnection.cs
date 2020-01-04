@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using Overby.Extensions.AsyncBinaryReaderWriter;
 using TcpMux.Extensions;
 
 namespace TcpMux
@@ -13,8 +14,9 @@ namespace TcpMux
     class MultiplexingConnection
     {
         private readonly DnsEndPoint _multiplexerTarget;
-        private TcpClient _client;
-        private NetworkStream _stream;
+        private readonly TcpClient _client;
+        private readonly AsyncBinaryWriter _writer;
+        private readonly AsyncBinaryReader _reader;
         private readonly SemaphoreSlim _asyncLock = new SemaphoreSlim(1);
         private readonly object _lock = new object();
         private int _nextStreamId = 1;
@@ -25,24 +27,26 @@ namespace TcpMux
         {
             _multiplexerTarget = multiplexerTarget;
             _client = new TcpClient(_multiplexerTarget.Host, _multiplexerTarget.Port);
-            _stream = _client.GetStream();
+            
+            var stream = _client.GetStream();
+            _writer = new AsyncBinaryWriter(stream);
+            _reader = new AsyncBinaryReader(stream);
         }
 
-        public void Connect()
+        public void Start()
         {
-
             Task.Run(async () =>
             {
                 while (true)
                 {
-                    var packetLength = await ReadUShort();
+                    var packetLength = await _reader.ReadUInt16Async();
                     if (packetLength < 4)
                     {
                         throw new InvalidOperationException($"Invalid packet size received: {packetLength}");
                     }
 
-                    var streamId = await ReadInt();
-                    var data = await ReadBytes((ushort)(packetLength - 4));
+                    var streamId = await _reader.ReadInt32Async();
+                    var data = await _reader.ReadBytesAsync(packetLength - 4);
                     await WriteToMultiplexedStream(streamId, data);
                 }
             });
@@ -59,43 +63,17 @@ namespace TcpMux
             await multiplexedStream.AddPendingData(data);
         }
 
-        private async Task<ArraySegment<byte>> ReadBytes(ushort size)
+        internal async Task<Stream> CreateMultiplexedStream(DnsEndPoint target)
         {
-            var buffer = new byte[65536];
-            var read = 0;
-            while (read < size)
-            {
-                var readBytes = await _stream.ReadAsync(buffer, read, size - read);
-                if (readBytes <= 0)
-                {
-                    // TODO: Deal with this more elegantly
-                    throw new Exception("Connection close");
-                }
+            // Create the new stream
+            var stream = new MultiplexedStream(this, GetNextStreamId());
 
-                read += readBytes;
-            }
+            // Send through the target descriptions
+            using var writer = new AsyncBinaryWriter(stream);
+            await writer.WriteAsync(target.Host);
+            await writer.WriteAsync(target.Port);
 
-            return new ArraySegment<byte>(buffer, 0, size);
-        }
-
-        private async Task<ushort> ReadUShort()
-        {
-            var buffer = await ReadBytes(2);
-            return (ushort)(buffer.Array![buffer.Offset] << 8 + buffer.Array[buffer.Offset + 1]);
-        }
-
-        private async Task<int> ReadInt()
-        {
-            var buffer = await ReadBytes(4);
-            return buffer.Array![buffer.Offset] << 24
-                + buffer.Array[buffer.Offset + 2] << 16
-                + buffer.Array[buffer.Offset + 3] << 8
-                + buffer.Array[buffer.Offset + 4];
-        }
-
-        internal Stream CreateMultiplexedStream()
-        {
-            return new MultiplexedStream(this, GetNextStreamId());
+            return stream;
         }
 
         private int GetNextStreamId()
@@ -115,30 +93,11 @@ namespace TcpMux
 
                 var bytesToWrite = arraySegment.Count - bytesWritten;
                 ushort packetLen = (ushort)Math.Min(bytesToWrite + 4, ushort.MaxValue);
-                await WriteUShort(packetLen);
-                await WriteInt(id);
-                await _stream.WriteAsync(arraySegment.Array!, bytesWritten, packetLen - 4);
+                await _writer.WriteAsync(packetLen);
+                await _writer.WriteAsync(id);
+                await _writer.WriteAsync(arraySegment.Array!, bytesWritten, packetLen - 4);
                 bytesWritten += packetLen - 4;
             }
-        }
-
-        private async Task WriteInt(int value)
-        {
-            var bytes = new byte[4];
-            bytes[0] = (byte)(value >> 24);
-            bytes[1] = (byte)(value >> 16);
-            bytes[2] = (byte)(value >> 8);
-            bytes[3] = (byte)value;
-
-            await _stream.WriteAsync(bytes);
-        }
-        private async Task WriteUShort(ushort value)
-        {
-            var bytes = new byte[2];
-            bytes[0] = (byte)(value >> 8);
-            bytes[2] = (byte)value;
-
-            await _stream.WriteAsync(bytes);
         }
     }
 
@@ -146,7 +105,6 @@ namespace TcpMux
     {
         private readonly MultiplexingConnection _connection;
         private readonly Channel<ArraySegment<byte>> _channel = Channel.CreateUnbounded<ArraySegment<byte>>();
-        private readonly object _lock = new object();
 
         public MultiplexedStream(MultiplexingConnection connection, int id)
         {

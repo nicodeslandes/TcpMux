@@ -23,7 +23,8 @@ namespace TcpMux
         }
 
         private readonly TcpMuxOptions _options;
-        private Lazy<LookupClient> _dnsLookupClient;
+        private readonly Lazy<LookupClient> _dnsLookupClient;
+        readonly MultiplexingConnection? _multiplexingConnection;
 
         public TcpMuxRunner(TcpMuxOptions options)
         {
@@ -114,7 +115,7 @@ namespace TcpMux
                     return;
                 }
 
-                var (targetStream, targetRemoteEndPoint) = ConnectToTarget(target);
+                var (targetStream, targetRemoteEndPoint) = await ConnectToTargetAsync(target);
 
                 if (_options.Ssl || _options.SslOffload)
                 {
@@ -171,16 +172,16 @@ namespace TcpMux
             return sslTargetStream;
         }
 
-        private (Stream stream, EndPoint remoteEndPoint) ConnectToTarget(DnsEndPoint target)
+        private async Task<(Stream stream, EndPoint remoteEndPoint)> ConnectToTargetAsync(DnsEndPoint target)
         {
             var targetHost = target.Host;
             var targetPort = target.Port;
 
             if (_options.MultiplexingMode == MultiplexingMode.Multiplexer)
             {
-                // We're in multiplexer mode; instead of connecting to the target, we simply send a message
-                // describing the target
-                var stream = CreateMultiplexedStream();
+                // We're in multiplexer mode; instead of connecting to the target, we simply
+                // create a new multipexed stream for the target
+                var stream = await CreateMultiplexedStream(target);
                 return (stream, target);
             }
 
@@ -195,10 +196,9 @@ namespace TcpMux
             return (tcpClient.GetStream(), tcpClient.Client.RemoteEndPoint);
         }
 
-        MultiplexingConnection? _multiplexingConnection;
-        private Stream CreateMultiplexedStream()
+        private Task<Stream> CreateMultiplexedStream(DnsEndPoint target)
         {
-            return _multiplexingConnection!.CreateMultiplexedStream();
+            return _multiplexingConnection!.CreateMultiplexedStream(target);
         }
 
         private void RouteMessages(Stream source, EndPoint sourceRemoteEndPoint, Stream target,
