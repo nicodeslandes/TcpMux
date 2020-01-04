@@ -1,20 +1,19 @@
 name: $(Year:yy)$(DayOfYear)$(Rev:.r)
 pool:
-  vmImage: 'Ubuntu 16.04'
+  vmImage: 'ubuntu-latest'
 
 variables:
   version: 1.0
   buildConfiguration: 'Release'
 
 steps:
-- script: >
-    wget https://download.visualstudio.microsoft.com/download/pr/c624c5d6-0e9c-4dd9-9506-6b197ef44dc8/ad61b332f3abcc7dec3a49434e4766e1/dotnet-sdk-3.0.100-preview7-012821-linux-x64.tar.gz &&
-    mkdir -p $HOME/dotnet &&
-    tar zxf dotnet-sdk-3.0.100-preview7-012821-linux-x64.tar.gz -C $HOME/dotnet
-
-  displayName: 'Installing .NET Core 3.0 SDK'
-
-- script: DOTNET_ROOT=$HOME/dotnet PATH=$HOME/dotnet:$PATH dotnet pack TcpMux/TcpMux.csproj -p:Version=$(version).$(Build.BuildNumber) -p:TargetFrameworks=netcoreapp2.1 -p:Configuration=$(buildConfiguration) -o $(Build.ArtifactStagingDirectory)
+- task: UseDotNet@2
+  displayName: 'Install .NET Core sdk'
+  inputs:
+    packageType: sdk
+    version: 3.1.100
+    installationPath: $(Agent.ToolsDirectory)/dotnet
+- script: dotnet pack TcpMux/TcpMux.csproj -p:Version=$(version).$(Build.BuildNumber) -p:TargetFrameworks=netcoreapp3.1 -p:Configuration=$(buildConfiguration) -o $(Build.ArtifactStagingDirectory)
   displayName: 'Build package'
 
 - task: PublishBuildArtifacts@1
