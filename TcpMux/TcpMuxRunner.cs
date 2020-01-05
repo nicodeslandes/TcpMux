@@ -42,15 +42,14 @@ namespace TcpMux
                 Log($"Preparing message routing to {_options.Target?.ToShortString()}");
             }
 
-            var listener = StartTcpListener();
+            var server = new TcpServer(_options);
             var certificate = GetOrCreateCertificate();
 
             Task.Run(async () =>
             {
-                while (true)
+                await foreach(var clientStream in server.GetClientConnections())
                 {
-                    var client = await listener.AcceptTcpClientAsync();
-                    HandleClientConnection(client, certificate);
+                    HandleClientConnection(clientStream, certificate);
                 }
             });
 
@@ -72,51 +71,36 @@ namespace TcpMux
             return certificate;
         }
 
-        private TcpListener StartTcpListener()
-        {
-            Log($"Opening local port {_options.ListenPort}...", addNewLine: false);
-            var listener = new TcpListener(IPAddress.Any, _options.ListenPort);
-            listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, false);
-            listener.Start();
-            Console.WriteLine(" done");
-            return listener;
-        }
-
-        private async void HandleClientConnection(TcpClient client, X509Certificate2? certificate)
+        private async void HandleClientConnection(EndPointStream clientStream, X509Certificate2? certificate)
         {
             try
             {
-                client.NoDelay = true;
-                Log($"New client connection: {client.Client.RemoteEndPoint}");
-
-                Stream sourceStream = client.GetStream();
-                var clientRemoteEndPoint = client.Client.RemoteEndPoint;
-
+                Log($"New client connection: {clientStream}");
                 var target = _options.Target;
 
                 if (_options.Ssl)
                 {
                     // Perform the SSL negotiation with the client, and read the target through SNI if
                     // SNI routing is enabled
-                    (sourceStream, target) = await NegotiateSslConnection(sourceStream, client, certificate);
+                    (clientStream, target) = await NegotiateSslConnection(clientStream, certificate);
                 }
 
                 if (target == null)
                 {
                     Console.WriteLine($"Failed to identify a target; closing connection");
-                    client.Close();
+                    clientStream.Stream.Close();
                     return;
                 }
 
-                var (targetStream, targetRemoteEndPoint) = await ConnectToTargetAsync(target);
+                var targetStream = await ConnectToTarget(target);
 
                 if (_options.Ssl || _options.SslOffload)
                 {
-                    targetStream = await HandleSslTarget(targetStream, target, targetRemoteEndPoint);
+                    targetStream = await HandleSslTarget(targetStream, target);
                 }
 
-                RouteMessages(sourceStream, clientRemoteEndPoint, targetStream, targetRemoteEndPoint);
-                RouteMessages(targetStream, targetRemoteEndPoint, sourceStream, clientRemoteEndPoint);
+                RouteMessages(clientStream, targetStream);
+                RouteMessages(targetStream, clientStream);
             }
             catch (Exception ex)
             {
@@ -124,13 +108,13 @@ namespace TcpMux
             }
         }
 
-        private async Task<(SslStream stream, DnsEndPoint? target)> NegotiateSslConnection(Stream sourceStream,
-            TcpClient client, X509Certificate2? certificate)
+        private async Task<(EndPointStream stream, DnsEndPoint? target)> NegotiateSslConnection(EndPointStream clientStream,
+            X509Certificate2? certificate)
         {
             var target = _options.Target;
-            var sslSourceStream = new SslStream(sourceStream);
+            var sslSourceStream = new SslStream(clientStream.Stream);
 
-            Log($"Performing SSL authentication with client {client.Client.RemoteEndPoint}");
+            Log($"Performing SSL authentication with client {clientStream}");
 
             string? sniHost = null;
             var sslOptions = new SslServerAuthenticationOptions
@@ -150,22 +134,21 @@ namespace TcpMux
                 target = new DnsEndPoint(sniHost, target?.Port ?? _options.ListenPort);
             }
 
-            LogVerbose($"SSL authentication with client {client.Client.RemoteEndPoint} successful");
-            return (sslSourceStream, target);
+            LogVerbose($"SSL authentication with client {clientStream} successful");
+            return (new EndPointStream(sslSourceStream, clientStream.EndPoint), target);
         }
 
-        private async Task<SslStream> HandleSslTarget(Stream targetStream, DnsEndPoint target,
-            EndPoint targetRemoteEndPoint)
+        private async Task<EndPointStream> HandleSslTarget(EndPointStream targetStream, DnsEndPoint target)
         {
-            LogVerbose($"Performing SSL authentication with server {targetRemoteEndPoint}");
-            var sslTargetStream = new SslStream(targetStream, false, ValidateCertificate);
+            LogVerbose($"Performing SSL authentication with server {targetStream}");
+            var sslTargetStream = new SslStream(targetStream.Stream, false, ValidateCertificate);
             await sslTargetStream.AuthenticateAsClientAsync(target.Host, null, SslProtocols.Tls12, false);
-            LogVerbose($"SSL authentication with server {targetRemoteEndPoint} successful; " +
+            LogVerbose($"SSL authentication with server {targetStream} successful; " +
                               $"server cert Subject: {sslTargetStream.RemoteCertificate?.Subject}");
-            return sslTargetStream;
+            return new EndPointStream(sslTargetStream, targetStream.EndPoint);
         }
 
-        private async Task<(Stream stream, EndPoint remoteEndPoint)> ConnectToTargetAsync(DnsEndPoint target)
+        private async Task<EndPointStream> ConnectToTarget(DnsEndPoint target)
         {
             var targetHost = target.Host;
             var targetPort = target.Port;
@@ -175,7 +158,7 @@ namespace TcpMux
                 // We're in multiplexer mode; instead of connecting to the target, we simply
                 // create a new multipexed stream for the target
                 var stream = await CreateMultiplexedStream(target);
-                return (stream, target);
+                return new EndPointStream(stream, target);
             }
 
             Console.Write($"Opening connection to {target.ToShortString()}...");
@@ -186,7 +169,7 @@ namespace TcpMux
 
             var tcpClient = new TcpClient(targetHost, targetPort) { NoDelay = true };
             Log($" opened target connection: {tcpClient.Client.RemoteEndPoint}");
-            return (tcpClient.GetStream(), tcpClient.Client.RemoteEndPoint);
+            return new EndPointStream(tcpClient.GetStream(), tcpClient.Client.RemoteEndPoint);
         }
 
         private Task<Stream> CreateMultiplexedStream(DnsEndPoint target)
@@ -194,23 +177,22 @@ namespace TcpMux
             return _multiplexingConnection!.CreateMultiplexedStream(target);
         }
 
-        private void RouteMessages(Stream source, EndPoint sourceRemoteEndPoint, Stream target,
-            EndPoint targetRemoteEndPoint)
+        private void RouteMessages(EndPointStream source, EndPointStream target)
         {
             var buffer = new byte[65536];
             Task.Run(async () =>
             {
                 while (true)
                 {
-                    var read = await source.ReadAsync(buffer, 0, buffer.Length);
+                    var read = await source.Stream.ReadAsync(buffer, 0, buffer.Length);
                     if (read == 0)
                     {
-                        Log($"Connection {sourceRemoteEndPoint} closed; closing connection {targetRemoteEndPoint}");
-                        target.Close();
+                        Log($"Connection {source} closed; closing connection {target}");
+                        target.Stream.Close();
                         return;
                     }
 
-                    Log($"Sending data from {sourceRemoteEndPoint} to {targetRemoteEndPoint}...");
+                    Log($"Sending data from {source} to {target}...");
                     if (_options.DumpHex)
                         Console.WriteLine(Utils.HexDump(buffer, 0, read));
 
@@ -219,7 +201,7 @@ namespace TcpMux
                         var text = Encoding.UTF8.GetString(buffer, 0, read);
                         Console.WriteLine(text);
                     }
-                    await target.WriteAsync(buffer, 0, read);
+                    await target.Stream.WriteAsync(buffer, 0, read);
                     Log($"{read} bytes sent");
                 }
             });
