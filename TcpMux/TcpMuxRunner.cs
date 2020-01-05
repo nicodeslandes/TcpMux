@@ -8,6 +8,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using DnsClient;
+using Serilog;
 using TcpMux.Extensions;
 using TcpMux.Options;
 
@@ -39,7 +40,7 @@ namespace TcpMux
 
             if (!_options.SniRouting)
             {
-                Log($"Preparing message routing to {_options.Target?.ToShortString()}");
+                Log.Information("Preparing message routing to {target}", _options.Target?.ToShortString());
             }
 
             var server = new TcpServer(_options);
@@ -75,7 +76,6 @@ namespace TcpMux
         {
             try
             {
-                Log($"New client connection: {clientStream}");
                 var target = _options.Target;
 
                 if (_options.Ssl)
@@ -92,29 +92,35 @@ namespace TcpMux
                     return;
                 }
 
-                var targetStream = await ConnectToTarget(target);
-
-                if (_options.Ssl || _options.SslOffload)
-                {
-                    targetStream = await HandleSslTarget(targetStream, target);
-                }
-
+                var targetStream = await OpenTargetStream(target);
                 RouteMessages(clientStream, targetStream);
                 RouteMessages(targetStream, clientStream);
             }
             catch (Exception ex)
             {
-                Log("Error: " + ex);
+                Log.Error(ex, "Error: {message}", ex.Message);
             }
         }
 
-        private async Task<(EndPointStream stream, DnsEndPoint? target)> NegotiateSslConnection(EndPointStream clientStream,
-            X509Certificate2? certificate)
+        private async Task<EndPointStream> OpenTargetStream(DnsEndPoint target)
+        {
+            var targetStream = await ConnectToTarget(target);
+
+            if (_options.Ssl || _options.SslOffload)
+            {
+                targetStream = await HandleSslTarget(targetStream, target);
+            }
+
+            return targetStream;
+        }
+
+        private async Task<(EndPointStream stream, DnsEndPoint? target)> NegotiateSslConnection(
+            EndPointStream clientStream, X509Certificate2? certificate)
         {
             var target = _options.Target;
             var sslSourceStream = new SslStream(clientStream.Stream);
 
-            Log($"Performing SSL authentication with client {clientStream}");
+            Log.Information("Performing SSL authentication with client {client}", clientStream);
 
             string? sniHost = null;
             var sslOptions = new SslServerAuthenticationOptions
@@ -130,21 +136,21 @@ namespace TcpMux
 
             if (sniHost != null)
             {
-                LogVerbose($"SNI Host: {sniHost}");
+                Log.Verbose("SNI Host: {sniHost}", sniHost);
                 target = new DnsEndPoint(sniHost, target?.Port ?? _options.ListenPort);
             }
 
-            LogVerbose($"SSL authentication with client {clientStream} successful");
+            Log.Verbose("SSL authentication with client {client} successful", clientStream);
             return (new EndPointStream(sslSourceStream, clientStream.EndPoint), target);
         }
 
         private async Task<EndPointStream> HandleSslTarget(EndPointStream targetStream, DnsEndPoint target)
         {
-            LogVerbose($"Performing SSL authentication with server {targetStream}");
+            Log.Verbose("Performing SSL authentication with server {server}", targetStream);
             var sslTargetStream = new SslStream(targetStream.Stream, false, ValidateCertificate);
             await sslTargetStream.AuthenticateAsClientAsync(target.Host, null, SslProtocols.Tls12, false);
-            LogVerbose($"SSL authentication with server {targetStream} successful; " +
-                              $"server cert Subject: {sslTargetStream.RemoteCertificate?.Subject}");
+            Log.Verbose("SSL authentication with server {server} successful; server cert Subject: {subject}",
+                targetStream, sslTargetStream.RemoteCertificate?.Subject);
             return new EndPointStream(sslTargetStream, targetStream.EndPoint);
         }
 
@@ -168,7 +174,7 @@ namespace TcpMux
             }
 
             var tcpClient = new TcpClient(targetHost, targetPort) { NoDelay = true };
-            Log($" opened target connection: {tcpClient.Client.RemoteEndPoint}");
+            Log.Information("Opened target connection: {endPoint}", tcpClient.Client.RemoteEndPoint);
             return new EndPointStream(tcpClient.GetStream(), tcpClient.Client.RemoteEndPoint);
         }
 
@@ -187,12 +193,12 @@ namespace TcpMux
                     var read = await source.Stream.ReadAsync(buffer, 0, buffer.Length);
                     if (read == 0)
                     {
-                        Log($"Connection {source} closed; closing connection {target}");
+                        Log.Information("Connection {source} closed; closing connection {target}", source, target);
                         target.Stream.Close();
                         return;
                     }
 
-                    Log($"Sending data from {source} to {target}...");
+                    Log.Information("Sending data from {source} to {target}...", source, target);
                     if (_options.DumpHex)
                         Console.WriteLine(Utils.HexDump(buffer, 0, read));
 
@@ -202,29 +208,14 @@ namespace TcpMux
                         Console.WriteLine(text);
                     }
                     await target.Stream.WriteAsync(buffer, 0, read);
-                    Log($"{read} bytes sent");
+                    Log.Information("{read} bytes sent", read);
                 }
             });
         }
 
-        private static void Log(string message, bool addNewLine = true)
-        {
-            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
-            if (addNewLine)
-                Console.WriteLine($"{timestamp} {message}");
-            else
-                Console.Write($"{timestamp} {message}");
-        }
-
-        private void LogVerbose(string message, bool addNewLine = true)
-        {
-            if (_options.Verbose)
-                Log(message, addNewLine);
-        }
-
         private bool ValidateCertificate(object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            LogVerbose($"Validating certificate from {cert.Subject}");
+            Log.Verbose("Validating certificate from {subject}", cert.Subject);
             return true;
         }
     }

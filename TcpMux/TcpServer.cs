@@ -1,8 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
+﻿using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
+using Serilog;
 using TcpMux.Options;
 
 namespace TcpMux
@@ -24,34 +23,20 @@ namespace TcpMux
             {
                 var client = await _server.AcceptTcpClientAsync();
                 client.NoDelay = true;
+                Log.Information("New client connection: {client}", client.Client.RemoteEndPoint);
                 yield return new EndPointStream(client);
             }
         }
 
         private TcpListener StartTcpListener()
         {
-            Log($"Opening local port {_options.ListenPort}...", addNewLine: false);
+            Log.Information("Opening local port {port}", _options.ListenPort);
+            Log.Verbose("I'm really doing it!");
             var listener = new TcpListener(IPAddress.Any, _options.ListenPort);
-            listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, false);
+            listener.Server.LingerState = new LingerOption(enable: false, seconds: 0);
             listener.Start();
-            Console.WriteLine(" done");
+            Log.Information("Port {port} succesfully opened", _options.ListenPort);
             return listener;
-        }
-
-        // TODO: Add Serilog/NLog
-        private static void Log(string message, bool addNewLine = true)
-        {
-            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
-            if (addNewLine)
-                Console.WriteLine($"{timestamp} {message}");
-            else
-                Console.Write($"{timestamp} {message}");
-        }
-
-        private void LogVerbose(string message, bool addNewLine = true)
-        {
-            if (_options.Verbose)
-                Log(message, addNewLine);
         }
     }
 }

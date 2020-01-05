@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Overby.Extensions.AsyncBinaryReaderWriter;
+using Serilog;
 using TcpMux.Extensions;
 
 namespace TcpMux
@@ -56,7 +57,7 @@ namespace TcpMux
         {
             if (!_multiplexedStreams.TryGetValue(streamId, out var multiplexedStream))
             {
-                Console.WriteLine($"Error!! Unknown stream id: {streamId}");
+                Log.Error("Unknown stream id: {streamId}", streamId);
                 return;
             }
 

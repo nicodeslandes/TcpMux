@@ -108,15 +108,15 @@ namespace TcpMux.Options
 
                     T ReadNextArgument<T>(string description)
                     {
-                        if (i >= args.Length || args[++i][0] == '-')
-                        {
-                            throw new InvalidOptionException($"Missing {description}");
-                        }
-
                         if (typeof(T) == typeof(DnsEndPoint))
                         {
                             var str = ReadNextArgument<string>(description);
                             return (T)(object)ParseEndpoint(str);
+                        }
+
+                        if (i >= args.Length || args[++i][0] == '-')
+                        {
+                            throw new InvalidOptionException($"Missing {description}");
                         }
 
                         var converter = TypeDescriptor.GetConverter(typeof(T));

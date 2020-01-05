@@ -2,6 +2,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
+using Serilog;
 using TcpMux.Options;
 
 namespace TcpMux
@@ -10,9 +11,22 @@ namespace TcpMux
     {
         public static int Main(string[] args)
         {
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                .WriteTo.Console()
+                .CreateLogger();
+
             if (!TryParseArguments(args, out var options))
             {
                 return 1;
+            }
+
+            if (options.Verbose)
+            {
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Verbose()
+                    .WriteTo.Console()
+                    .CreateLogger();
             }
 
             switch (options.RunningMode)
