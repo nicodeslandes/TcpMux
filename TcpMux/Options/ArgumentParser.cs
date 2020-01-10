@@ -5,13 +5,9 @@ using System.Net;
 
 namespace TcpMux.Options
 {
-    public class ArgumentParser
+    public sealed class ArgumentParser
     {
-        public ArgumentParser()
-        {
-        }
-
-        public OptionParsingResult ParseArguments(string[] args)
+        public static OptionParsingResult ParseArguments(string[] args)
         {
             var remainingArgs = new List<string>();
             var options = new TcpMuxOptions();
@@ -26,9 +22,15 @@ namespace TcpMux.Options
                     options.Target = new DnsEndPoint(options.Target.Host, options.ListenPort);
                 }
 
-                if (options.Target is null && !options.SniRouting)
+                if (options.Target is null && !options.SniRouting && options.MultiplexingMode == MultiplexingMode.None)
                 {
                     throw new InvalidOptionException("Please specify a target with the -t option");
+                }
+
+                if (options.MultiplexingMode == MultiplexingMode.Demultiplexer && options.ListenPort == 0)
+                {
+                    throw new InvalidOptionException("In demultiplexing mode, please specify a listening port with " +
+                        "the -l option");
                 }
             }
             catch (InvalidOptionException ex)
@@ -100,7 +102,6 @@ namespace TcpMux.Options
                             break;
                         case "-demux":
                             options.MultiplexingMode = MultiplexingMode.Demultiplexer;
-                            options.MultiplexingListeningPort = ReadNextArgument<ushort>("MultiplexingListeningPort");
                             break;
                         default:
                             throw new InvalidOptionException($"Invalid option: {arg}");

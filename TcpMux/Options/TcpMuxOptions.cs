@@ -17,7 +17,6 @@ namespace TcpMux.Options
         public bool ForceDnsResolution { get; set; }
         public MultiplexingMode MultiplexingMode { get; set; }
         public DnsEndPoint? MultiplexingTarget { get; set; }
-        public ushort MultiplexingListeningPort { get; internal set; }
     }
 
     public enum RunningMode

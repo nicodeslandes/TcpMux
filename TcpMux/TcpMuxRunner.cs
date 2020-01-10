@@ -33,7 +33,7 @@ namespace TcpMux
 
         public void Run()
         {
-            if (_options.Target is null && !_options.SniRouting)
+            if (_options.Target is null && !_options.SniRouting && _options.MultiplexingMode == MultiplexingMode.None)
             {
                 throw new InvalidOperationException("Target host cannot be null");
             }

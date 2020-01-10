@@ -7,7 +7,7 @@ using TcpMux.Options;
 
 namespace TcpMux
 {
-    public partial class Program
+    public sealed class Program
     {
         public static int Main(string[] args)
         {
@@ -50,9 +50,7 @@ namespace TcpMux
         private static bool TryParseArguments(string[] args,
             [NotNullWhen(returnValue: true)]out TcpMuxOptions? options)
         {
-            var argumentParser = new ArgumentParser();
-
-            switch (argumentParser.ParseArguments(args))
+            switch (ArgumentParser.ParseArguments(args))
             {
                 case ParsingSuccess(var o):
                     options = o;
@@ -103,7 +101,7 @@ namespace TcpMux
                 new string('-', versionLine.Length) + "\n" +
                 versionLine + "\n" +
                 new string('-', versionLine.Length) + "\n\n" +
-                "Usage: tcpmux [options] <listen_port> <target_host> <target_port>\n\n" +
+                "Usage: tcpmux [options]\n\n" +
                 "options:\n" +
                 "   -v: Verbose mode; display traffic\n" +
                 "   -l <port>: Port to open\n" +

@@ -68,7 +68,7 @@ namespace TcpMux
             {
                 return EndPointParser.Parse(targetString);
             }
-            catch (Exception ex)
+            catch (ParsingError ex)
             {
                 Log.Warning(ex, "Failed to read target: {error}", ex.Message);
                 return null;

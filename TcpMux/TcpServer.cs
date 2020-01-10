@@ -30,12 +30,12 @@ namespace TcpMux
 
         private TcpListener StartTcpListener()
         {
-            Log.Information("Opening local port {port}", _options.ListenPort);
-            Log.Verbose("I'm really doing it!");
-            var listener = new TcpListener(IPAddress.Any, _options.ListenPort);
+            var listenPort = _options.ListenPort;
+            Log.Information("Opening local port {port}", listenPort);
+            var listener = new TcpListener(IPAddress.Any, listenPort);
             listener.Server.LingerState = new LingerOption(enable: false, seconds: 0);
             listener.Start();
-            Log.Information("Port {port} succesfully opened", _options.ListenPort);
+            Log.Information("Port {port} succesfully opened", listenPort);
             return listener;
         }
     }
