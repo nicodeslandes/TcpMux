@@ -111,7 +111,14 @@ namespace TcpMux.Options
                         if (typeof(T) == typeof(DnsEndPoint))
                         {
                             var str = ReadNextArgument<string>(description);
-                            return (T)(object)ParseEndpoint(str);
+                            try
+                            {
+                                return (T)(object)EndPointParser.Parse(str);
+                            }
+                            catch (ParsingError ex)
+                            {
+                                throw new InvalidOptionException($"Incorrect value for {description}: {str}", ex);
+                            }
                         }
 
                         if (i >= args.Length || args[++i][0] == '-')
@@ -134,40 +141,6 @@ namespace TcpMux.Options
 
                 options.RunningMode = mode;
             }
-        }
-
-        private DnsEndPoint ParseEndpoint(string str)
-        {
-            void ThrowInvalidOptionException()
-            {
-                throw new InvalidOptionException($"Invalid value: '{str}': please use <host>[:<port>] format");
-            }
-
-            if (string.IsNullOrWhiteSpace(str))
-            {
-                ThrowInvalidOptionException();
-            }
-
-            var elements = str.Split(':');
-            if (elements.Length > 2)
-            {
-                ThrowInvalidOptionException();
-            }
-
-            if (elements.Length == 2)
-            {
-                // Parse the port
-                if (ushort.TryParse(elements[1], out var port))
-                {
-                    return new DnsEndPoint(elements[0], port);
-                }
-                else
-                {
-                    throw new InvalidOptionException($"Invalid port: {elements[1]}");
-                }
-            }
-
-            return new DnsEndPoint(elements[0], 0);
         }
     }
 }
