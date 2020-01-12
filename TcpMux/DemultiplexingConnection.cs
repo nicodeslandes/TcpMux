@@ -25,6 +25,7 @@ namespace TcpMux
             _stream = stream;
             _writer = new AsyncBinaryWriter(_stream.Stream);
             _reader = new AsyncBinaryReader(_stream.Stream);
+            Start();
         }
         public IAsyncEnumerable<EndPointStream> GetMultiplexedConnections()
         {
@@ -43,18 +44,26 @@ namespace TcpMux
                         // New multiplexed connection
                         demultiplexedStream = new DemultiplexedStream(this, packet.StreamId);
 
-                        // Read the target from it
-                        var target = await TryReadTarget(demultiplexedStream);
-                        if (target == null)
-                        {
-                            Log.Warning("Invalid target name received. Closing connection to {endPoint}",
-                                _stream.EndPoint);
-                            _stream.Stream.Close();
-                            break;
-                        }
+                        _demultiplexedStreams[packet.StreamId] = demultiplexedStream;
 
-                        // Yield a new demultiplexed stream
-                        await _newConnections.Writer.WriteAsync(new EndPointStream(demultiplexedStream, target));
+                        Task.Run(async () =>
+                        {
+
+                            // Read the target from it
+                            Log.Verbose("New multiplexed stream {id} received; reading stream target", packet.StreamId);
+                            var target = await TryReadTarget(demultiplexedStream);
+                            if (target == null)
+                            {
+                                Log.Warning("Invalid target name received. Closing connection to {endPoint}",
+                                    _stream.EndPoint);
+                                _stream.Stream.Close();
+                            }
+
+                            // Yield a new demultiplexed stream
+                            Log.Information("New multiplexed stream {id} received for target {target}",
+                                packet.StreamId, target);
+                            await _newConnections.Writer.WriteAsync(new EndPointStream(demultiplexedStream, target));
+                        });
                     }
                 }
             });
@@ -77,10 +86,14 @@ namespace TcpMux
 
         private async Task<MultiplexedPacket> ReadPacket()
         {
+            Log.Verbose("Reading multiplexed packet from {endpoint}", _stream);
             var id = await _reader.ReadInt32Async();
+            Log.Verbose("id: {id} (0x{id:x})", id, id);
             var length = await _reader.ReadUInt16Async();
+            Log.Verbose("length: {length}", length);
             var data = await _reader.ReadBytesAsync(length - 4);
             var packet = new MultiplexedPacket(id, new ArraySegment<byte>(data));
+            Log.Debug("Read multiplexed packet with id {id}, length {length}", id, length);
             return packet;
         }
 
@@ -121,6 +134,7 @@ namespace TcpMux
         private readonly DemultiplexingConnection _connection;
         private readonly Channel<ArraySegment<byte>> _channel = Channel.CreateUnbounded<ArraySegment<byte>>();
         private ArraySegment<byte>? _pendingData;
+
         public DemultiplexedStream(DemultiplexingConnection connection, int id)
         {
             _connection = connection;
@@ -130,8 +144,12 @@ namespace TcpMux
 
         public async override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
+            Log.Verbose("Reading {count} bytes from demultiplexed stream {id}", count, Id);
+
             // TODO: Make thread-safe
             var data = _pendingData ?? await _channel.Reader.ReadAsync();
+
+            Log.Verbose("Processing {count} bytes from demultiplexed stream {id}", data.Count, Id);
 
             var copiedByteCount = Math.Min(data.Count, count);
             data.CopyTo(new ArraySegment<byte>(buffer, offset, count));
@@ -151,6 +169,7 @@ namespace TcpMux
 
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
+            Log.Verbose("Writing {count} bytes to demultiplexed stream {id}", count, Id);
             return _connection.WriteMultiplexedData(Id, new ArraySegment<byte>(buffer, offset, count));
         }
 

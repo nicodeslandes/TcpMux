@@ -11,6 +11,10 @@
     "TcpMux SNI": {
       "commandName": "Project",
       "commandLineArgs": "-v -ssl -sni -l 443"
+    },
+    "TcpMux demux": {
+      "commandName": "Project",
+      "commandLineArgs": "-demux -l 1223 -v"
     }
   }
 }

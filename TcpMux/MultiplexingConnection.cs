@@ -32,10 +32,13 @@ namespace TcpMux
             var stream = _client.GetStream();
             _writer = new AsyncBinaryWriter(stream);
             _reader = new AsyncBinaryReader(stream);
+
+            Start();
         }
 
         public void Start()
         {
+            // Start reading task, which reads data from the network, and pushes data to the multiplexed streams
             Task.Run(async () =>
             {
                 while (true)
@@ -51,6 +54,10 @@ namespace TcpMux
                     await WriteToMultiplexedStream(streamId, data);
                 }
             });
+
+            // Start writing task, which receives data written to the multiplexed streams, and writes it to the network
+
+
         }
 
         private async ValueTask WriteToMultiplexedStream(int streamId, ArraySegment<byte> data)
@@ -70,10 +77,11 @@ namespace TcpMux
             var stream = new MultiplexedStream(this, GetNextStreamId());
 
             // Send through the target descriptions
+            Log.Verbose("Writing to multiplexed stream {id}: {host},{port}", stream.Id, target.Host, target.Port);
             using var writer = new AsyncBinaryWriter(stream);
             await writer.WriteAsync(target.Host);
             await writer.WriteAsync(target.Port);
-
+            await writer.FlushAsync();
             return stream;
         }
 
@@ -87,6 +95,9 @@ namespace TcpMux
 
         internal async Task WriteMultiplexedData(int id, ArraySegment<byte> arraySegment)
         {
+            Log.Verbose("Writing to multiplexing connection; stream id: {id}; data length: {count} bytes",
+                id, arraySegment.Count);
+
             int bytesWritten = 0;
             while (bytesWritten < arraySegment.Count)
             {
@@ -94,11 +105,14 @@ namespace TcpMux
 
                 var bytesToWrite = arraySegment.Count - bytesWritten;
                 ushort packetLen = (ushort)Math.Min(bytesToWrite + 4, ushort.MaxValue);
-                await _writer.WriteAsync(packetLen);
                 await _writer.WriteAsync(id);
+                await _writer.WriteAsync(packetLen);
                 await _writer.WriteAsync(arraySegment.Array!, bytesWritten, packetLen - 4);
                 bytesWritten += packetLen - 4;
             }
+
+            await _writer.FlushAsync();
+            Log.Verbose("{count} bytes successfully written to stream {id}", arraySegment.Count, id);
         }
     }
 

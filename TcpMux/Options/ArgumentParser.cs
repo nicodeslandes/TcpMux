@@ -22,6 +22,11 @@ namespace TcpMux.Options
                     options.Target = new DnsEndPoint(options.Target.Host, options.ListenPort);
                 }
 
+                if (options.SniRouting && !options.Ssl)
+                {
+                    throw new InvalidOptionException("Sni options requires SSL handling with the -ssl option");
+                }
+
                 if (options.Target is null && !options.SniRouting && options.MultiplexingMode == MultiplexingMode.None)
                 {
                     throw new InvalidOptionException("Please specify a target with the -t option");

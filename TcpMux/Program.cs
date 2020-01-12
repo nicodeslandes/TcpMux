@@ -83,10 +83,12 @@ namespace TcpMux
                 // Add CA certificate to Root store
                 CertificateFactory.AddCertToStore(cert, StoreName.Root, StoreLocation.CurrentUser);
             }
+#pragma warning disable CA1031 // Do not catch general exception types
             catch (Exception ex)
             {
                 Console.WriteLine("Error: " + ex.Message);
             }
+#pragma warning restore CA1031 // Do not catch general exception types
         }
 
 

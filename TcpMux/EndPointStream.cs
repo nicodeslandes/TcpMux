@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using TcpMux.Extensions;
 
 namespace TcpMux
 {
@@ -19,6 +20,11 @@ namespace TcpMux
         public Stream Stream { get; }
         public EndPoint EndPoint { get; }
 
-        public override string ToString() => EndPoint.ToString()!;
+        public override string ToString() =>
+            EndPoint switch
+            {
+                DnsEndPoint d => d.ToShortString(),
+                var x => x.ToString()!
+            };
     }
 }

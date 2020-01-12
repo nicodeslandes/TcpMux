@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Security;
@@ -6,6 +7,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using DnsClient;
 using Serilog;
@@ -27,6 +29,7 @@ namespace TcpMux
 
             if (options.MultiplexingMode == MultiplexingMode.Multiplexer && options.MultiplexingTarget != null)
             {
+                Log.Information("Opening multiplexing connection to {target}", _options.MultiplexingTarget);
                 _multiplexingConnection = new MultiplexingConnection(options.MultiplexingTarget);
             }
         }
@@ -38,19 +41,26 @@ namespace TcpMux
                 throw new InvalidOperationException("Target host cannot be null");
             }
 
-            if (!_options.SniRouting)
+            if (_options.SniRouting)
             {
-                Log.Information("Preparing message routing to {target}", _options.Target?.ToShortString());
+                Log.Information("Preparing message routing using SNI");
+            }
+            else if (_options.Target != null)
+            {
+                Log.Information("Preparing message routing to {target}", _options.Target.ToShortString());
             }
 
-            var server = new TcpServer(_options);
-            var certificate = GetOrCreateCertificate();
+
+            var tcpServer = new TcpServer(_options);
+            var connectionSource =
+                _options.MultiplexingMode == MultiplexingMode.Demultiplexer ? OpenDemultiplexingServer(tcpServer)
+                : tcpServer.GetClientConnections();
 
             Task.Run(async () =>
             {
-                await foreach(var clientStream in server.GetClientConnections())
+                await foreach (var clientStream in connectionSource)
                 {
-                    HandleClientConnection(clientStream, certificate);
+                    HandleClientConnection(clientStream);
                 }
             });
 
@@ -61,33 +71,48 @@ namespace TcpMux
             }
         }
 
-        private X509Certificate2? GetOrCreateCertificate()
+        private IAsyncEnumerable<EndPointStream> OpenDemultiplexingServer(TcpServer server)
         {
-            X509Certificate2? certificate = null;
-            if (_options.Ssl && !_options.SniRouting)
-            {
-                certificate = CertificateFactory.GetCertificateForSubject(_options.SslCn ?? _options.Target!.Host);
-            }
+            var connectionSource = Channel.CreateUnbounded<EndPointStream>();
+            Task.Run(AcceptConnections);
+            return connectionSource.Reader.ReadAllAsync();
 
-            return certificate;
+            async Task AcceptConnections()
+            {
+                await foreach (var connection in server.GetClientConnections())
+                {
+                    _ = Task.Run(() => HandleClientConnection(connection));
+                }
+            };
+
+            async Task HandleClientConnection(EndPointStream client)
+            {
+                Log.Verbose("Creating demultiplexing connection from {client}", client.EndPoint);
+                var demultiplexingConnection = new DemultiplexingConnection(client);
+                await foreach (var c in demultiplexingConnection.GetMultiplexedConnections())
+                {
+                    await connectionSource.Writer.WriteAsync(c);
+                }
+            }
         }
 
-        private async void HandleClientConnection(EndPointStream clientStream, X509Certificate2? certificate)
+        private async void HandleClientConnection(EndPointStream clientStream)
         {
             try
             {
+                Log.Debug("New connection from {client}", clientStream.EndPoint);
                 var target = _options.Target;
 
                 if (_options.Ssl)
                 {
                     // Perform the SSL negotiation with the client, and read the target through SNI if
                     // SNI routing is enabled
-                    (clientStream, target) = await NegotiateSslConnection(clientStream, certificate);
+                    (clientStream, target) = await NegotiateSslConnection(clientStream);
                 }
 
                 if (target == null)
                 {
-                    Console.WriteLine($"Failed to identify a target; closing connection");
+                    Log.Warning("Failed to identify a target; closing connection");
                     clientStream.Stream.Close();
                     return;
                 }
@@ -96,10 +121,12 @@ namespace TcpMux
                 RouteMessages(clientStream, targetStream);
                 RouteMessages(targetStream, clientStream);
             }
+#pragma warning disable CA1031 // Do not catch general exception types
             catch (Exception ex)
             {
                 Log.Error(ex, "Error: {message}", ex.Message);
             }
+#pragma warning restore CA1031 // Do not catch general exception types
         }
 
         private async Task<EndPointStream> OpenTargetStream(DnsEndPoint target)
@@ -115,7 +142,7 @@ namespace TcpMux
         }
 
         private async Task<(EndPointStream stream, DnsEndPoint? target)> NegotiateSslConnection(
-            EndPointStream clientStream, X509Certificate2? certificate)
+            EndPointStream clientStream)
         {
             var target = _options.Target;
             var sslSourceStream = new SslStream(clientStream.Stream);
@@ -140,7 +167,7 @@ namespace TcpMux
                 target = new DnsEndPoint(sniHost, target?.Port ?? _options.ListenPort);
             }
 
-            Log.Verbose("SSL authentication with client {client} successful", clientStream);
+            Log.Debug("SSL authentication with client {client} successful", clientStream);
             return (new EndPointStream(sslSourceStream, clientStream.EndPoint), target);
         }
 
@@ -167,7 +194,7 @@ namespace TcpMux
                 return new EndPointStream(stream, target);
             }
 
-            Console.Write($"Opening connection to {target.ToShortString()}...");
+            Log.Information("Opening connection to {target}", target.ToShortString());
             if (_options.ForceDnsResolution)
             {
                 targetHost = _dnsLookupClient.Value.GetHostEntry(targetHost).AddressList[0].ToString();
@@ -180,6 +207,7 @@ namespace TcpMux
 
         private Task<Stream> CreateMultiplexedStream(DnsEndPoint target)
         {
+            Log.Debug("Creating new multiplexed stream to {target}", target.ToShortString());
             return _multiplexingConnection!.CreateMultiplexedStream(target);
         }
 
@@ -208,7 +236,7 @@ namespace TcpMux
                         Console.WriteLine(text);
                     }
                     await target.Stream.WriteAsync(buffer, 0, read);
-                    Log.Information("{read} bytes sent", read);
+                    Log.Verbose("{read} bytes sent", read);
                 }
             });
         }
