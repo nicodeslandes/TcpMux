@@ -131,10 +131,11 @@ namespace TcpMux
 
         public async override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
+            Log.Verbose("Reading {count} bytes from stream {id}", count, Id);
             // TODO: Remove duplication with DemultiplexingConnection
             var data = _pendingData ?? await _channel.Reader.ReadAsync(cancellationToken);
             var copiedByteCount = Math.Min(data.Count, count);
-            data.CopyTo(new ArraySegment<byte>(buffer, offset, count));
+            data.Slice(0, copiedByteCount).CopyTo(buffer, offset);
 
             if (copiedByteCount < data.Count)
             {

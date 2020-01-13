@@ -155,7 +155,7 @@ namespace TcpMux
             Log.Verbose("Processing {count} bytes from demultiplexed stream {id}", data.Count, Id);
 
             var copiedByteCount = Math.Min(data.Count, count);
-            data.CopyTo(new ArraySegment<byte>(buffer, offset, count));
+            data.Slice(0, copiedByteCount).CopyTo(buffer, offset);
 
             if (copiedByteCount < data.Count)
             {
