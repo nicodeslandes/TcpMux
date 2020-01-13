@@ -43,14 +43,13 @@ namespace TcpMux
             {
                 while (true)
                 {
-                    var packetLength = await _reader.ReadUInt16Async();
-                    if (packetLength < 4)
-                    {
-                        throw new InvalidOperationException($"Invalid packet size received: {packetLength}");
-                    }
-
+                    Log.Verbose("Reading multiplexed packet from {endpoint}", _client.Client.RemoteEndPoint);
                     var streamId = await _reader.ReadInt32Async();
-                    var data = await _reader.ReadBytesAsync(packetLength - 4);
+                    Log.Verbose("id: {id} (0x{id:x})", streamId, streamId);
+                    var packetLength = await _reader.ReadUInt16Async();
+                    Log.Verbose("length: {length}", packetLength);
+                    var data = await _reader.ReadBytesAsync(packetLength);
+                    Log.Debug("Read multiplexed packet with id {id}, length {length}", streamId, packetLength);
                     await WriteToMultiplexedStream(streamId, data);
                 }
             });
@@ -75,12 +74,13 @@ namespace TcpMux
         {
             // Create the new stream
             var stream = new MultiplexedStream(this, GetNextStreamId());
+            _multiplexedStreams[stream.Id] = stream;
 
             // Send through the target descriptions
             Log.Verbose("Writing to multiplexed stream {id}: {host},{port}", stream.Id, target.Host, target.Port);
             using var writer = new AsyncBinaryWriter(stream);
             await writer.WriteAsync(target.Host);
-            await writer.WriteAsync(target.Port);
+            await writer.WriteAsync((ushort)target.Port);
             await writer.FlushAsync();
             return stream;
         }
@@ -104,11 +104,11 @@ namespace TcpMux
                 using var l = await _asyncLock.TakeLock();
 
                 var bytesToWrite = arraySegment.Count - bytesWritten;
-                ushort packetLen = (ushort)Math.Min(bytesToWrite + 4, ushort.MaxValue);
+                ushort packetSize = (ushort)Math.Min(bytesToWrite, ushort.MaxValue);
                 await _writer.WriteAsync(id);
-                await _writer.WriteAsync(packetLen);
-                await _writer.WriteAsync(arraySegment.Array!, bytesWritten, packetLen - 4);
-                bytesWritten += packetLen - 4;
+                await _writer.WriteAsync(packetSize);
+                await _writer.WriteAsync(arraySegment.Array!, bytesWritten, packetSize);
+                bytesWritten += packetSize;
             }
 
             await _writer.FlushAsync();
@@ -120,6 +120,7 @@ namespace TcpMux
     {
         private readonly MultiplexingConnection _connection;
         private readonly Channel<ArraySegment<byte>> _channel = Channel.CreateUnbounded<ArraySegment<byte>>();
+        private ArraySegment<byte>? _pendingData;
 
         public MultiplexedStream(MultiplexingConnection connection, int id)
         {
@@ -130,9 +131,22 @@ namespace TcpMux
 
         public async override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            var segment = await _channel.Reader.ReadAsync(cancellationToken);
-            segment.CopyTo(buffer, offset);
-            return segment.Count;
+            // TODO: Remove duplication with DemultiplexingConnection
+            var data = _pendingData ?? await _channel.Reader.ReadAsync(cancellationToken);
+            var copiedByteCount = Math.Min(data.Count, count);
+            data.CopyTo(new ArraySegment<byte>(buffer, offset, count));
+
+            if (copiedByteCount < data.Count)
+            {
+                _pendingData = data.Slice(copiedByteCount);
+            }
+            else
+            {
+                // TODO: See if there isn't more pending data to write to the buffer
+                _pendingData = null;
+            }
+
+            return copiedByteCount;
         }
 
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)

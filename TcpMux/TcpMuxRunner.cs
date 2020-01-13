@@ -29,7 +29,8 @@ namespace TcpMux
 
             if (options.MultiplexingMode == MultiplexingMode.Multiplexer && options.MultiplexingTarget != null)
             {
-                Log.Information("Opening multiplexing connection to {target}", _options.MultiplexingTarget);
+                Log.Information("Opening multiplexing connection to {target}",
+                    options.MultiplexingTarget.ToShortString());
                 _multiplexingConnection = new MultiplexingConnection(options.MultiplexingTarget);
             }
         }
@@ -100,8 +101,11 @@ namespace TcpMux
         {
             try
             {
-                Log.Debug("New connection from {client}", clientStream.EndPoint);
-                var target = _options.Target;
+                Log.Debug("New connection from {client}", clientStream);
+
+                // TODO: Move to function
+                var target = _options.MultiplexingMode == MultiplexingMode.Demultiplexer ?
+                    (DnsEndPoint)clientStream.EndPoint : _options.Target;
 
                 if (_options.Ssl)
                 {

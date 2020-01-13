@@ -8,6 +8,7 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using Overby.Extensions.AsyncBinaryReaderWriter;
 using Serilog;
+using TcpMux.Extensions;
 
 namespace TcpMux
 {
@@ -19,6 +20,7 @@ namespace TcpMux
         private readonly Channel<EndPointStream> _newConnections = Channel.CreateUnbounded<EndPointStream>();
         private readonly Dictionary<int, DemultiplexedStream> _demultiplexedStreams
             = new Dictionary<int, DemultiplexedStream>();
+        private readonly SemaphoreSlim _asyncLock = new SemaphoreSlim(1);
 
         public DemultiplexingConnection(EndPointStream stream)
         {
@@ -46,42 +48,37 @@ namespace TcpMux
 
                         _demultiplexedStreams[packet.StreamId] = demultiplexedStream;
 
-                        Task.Run(async () =>
+                        _ = Task.Run(async () =>
                         {
-
                             // Read the target from it
                             Log.Verbose("New multiplexed stream {id} received; reading stream target", packet.StreamId);
-                            var target = await TryReadTarget(demultiplexedStream);
+                            var target = await ReadTarget(demultiplexedStream);
                             if (target == null)
                             {
                                 Log.Warning("Invalid target name received. Closing connection to {endPoint}",
                                     _stream.EndPoint);
                                 _stream.Stream.Close();
+                                return;
                             }
 
                             // Yield a new demultiplexed stream
                             Log.Information("New multiplexed stream {id} received for target {target}",
-                                packet.StreamId, target);
+                                packet.StreamId, target.ToShortString());
                             await _newConnections.Writer.WriteAsync(new EndPointStream(demultiplexedStream, target));
                         });
                     }
+                    
+                    await demultiplexedStream.ForwardData(packet.Data);
                 }
             });
         }
 
-        private async Task<DnsEndPoint?> TryReadTarget(DemultiplexedStream stream)
+        private async Task<DnsEndPoint> ReadTarget(DemultiplexedStream stream)
         {
             var reader = new AsyncBinaryReader(stream);
-            var targetString = await reader.ReadStringAsync();
-            try
-            {
-                return EndPointParser.Parse(targetString);
-            }
-            catch (ParsingError ex)
-            {
-                Log.Warning(ex, "Failed to read target: {error}", ex.Message);
-                return null;
-            }
+            var host = await reader.ReadStringAsync();
+            var port = await reader.ReadUInt16Async();
+            return new DnsEndPoint(host, port);
         }
 
         private async Task<MultiplexedPacket> ReadPacket()
@@ -91,7 +88,7 @@ namespace TcpMux
             Log.Verbose("id: {id} (0x{id:x})", id, id);
             var length = await _reader.ReadUInt16Async();
             Log.Verbose("length: {length}", length);
-            var data = await _reader.ReadBytesAsync(length - 4);
+            var data = await _reader.ReadBytesAsync(length);
             var packet = new MultiplexedPacket(id, new ArraySegment<byte>(data));
             Log.Debug("Read multiplexed packet with id {id}, length {length}", id, length);
             return packet;
@@ -99,10 +96,16 @@ namespace TcpMux
 
         private async Task WritePacket(MultiplexedPacket packet)
         {
+            // TODO: Serialise this calls using a channel (or maybe this is fine?)
+            using var _ = await _asyncLock.TakeLock();
+
             // TODO: Remove copy-pasted code from MultiplexedStream
-            await _writer.WriteAsync(packet.Data.Count + 4);
+            Log.Verbose("Writing multiplexed packet; stream id: {id}; data length: {count} bytes",
+                packet.StreamId, packet.Data.Count);
             await _writer.WriteAsync(packet.StreamId);
+            await _writer.WriteAsync(packet.Data.Count);
             await _writer.WriteAsync(packet.Data.Array!, packet.Data.Offset, packet.Data.Count);
+            await _writer.FlushAsync();
         }
 
         internal async Task WriteMultiplexedData(int id, ArraySegment<byte> data)
@@ -111,9 +114,9 @@ namespace TcpMux
             while (bytesWritten < data.Count)
             {
                 var bytesToWrite = data.Count - bytesWritten;
-                var packetLen = Math.Min(bytesToWrite + 4, ushort.MaxValue);
-                await WritePacket(new MultiplexedPacket(id, data.Slice(bytesWritten, packetLen - 4)));
-                bytesWritten += packetLen - 4;
+                var packetLen = Math.Min(bytesToWrite, ushort.MaxValue);
+                await WritePacket(new MultiplexedPacket(id, data.Slice(bytesWritten, packetLen)));
+                bytesWritten += packetLen;
             }
         }
     }
