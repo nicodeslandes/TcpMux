@@ -3,18 +3,21 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Overby.Extensions.AsyncBinaryReaderWriter;
 using Serilog;
 using TcpMux.Extensions;
+using TcpMux.Options;
 
 namespace TcpMux
 {
     class MultiplexingConnection
     {
         private readonly DnsEndPoint _multiplexerTarget;
+        private readonly TcpMuxOptions _options;
         private readonly TcpClient _client;
         private readonly AsyncBinaryWriter _writer;
         private readonly AsyncBinaryReader _reader;
@@ -24,9 +27,10 @@ namespace TcpMux
 
         private readonly Dictionary<int, MultiplexedStream> _multiplexedStreams = new Dictionary<int, MultiplexedStream>();
 
-        public MultiplexingConnection(DnsEndPoint multiplexerTarget)
+        public MultiplexingConnection(DnsEndPoint multiplexerTarget, TcpMuxOptions options)
         {
             _multiplexerTarget = multiplexerTarget;
+            _options = options;
             _client = new TcpClient(_multiplexerTarget.Host, _multiplexerTarget.Port);
             
             var stream = _client.GetStream();
@@ -73,7 +77,7 @@ namespace TcpMux
         internal async Task<Stream> CreateMultiplexedStream(DnsEndPoint target)
         {
             // Create the new stream
-            var stream = new MultiplexedStream(this, GetNextStreamId());
+            var stream = new MultiplexedStream(this, GetNextStreamId(), _options);
             _multiplexedStreams[stream.Id] = stream;
 
             // Send through the target descriptions
@@ -119,13 +123,15 @@ namespace TcpMux
     class MultiplexedStream : Stream
     {
         private readonly MultiplexingConnection _connection;
+        private readonly TcpMuxOptions _options;
         private readonly Channel<ArraySegment<byte>> _channel = Channel.CreateUnbounded<ArraySegment<byte>>();
         private ArraySegment<byte>? _pendingData;
 
-        public MultiplexedStream(MultiplexingConnection connection, int id)
+        public MultiplexedStream(MultiplexingConnection connection, int id, TcpMuxOptions options)
         {
             _connection = connection;
             Id = id;
+            _options = options;
         }
         public int Id { get; }
 
@@ -147,11 +153,33 @@ namespace TcpMux
                 _pendingData = null;
             }
 
+            Log.Information("Read {count} bytes from multiplexed stream {id}", copiedByteCount, Id);
+            if (_options.DumpHex)
+            {
+                Console.WriteLine(Utils.HexDump(buffer, 0, copiedByteCount));
+            }
+
+            if (_options.DumpText)
+            {
+                var text = Encoding.UTF8.GetString(buffer, 0, copiedByteCount);
+                Console.WriteLine(text);
+            }
+
             return copiedByteCount;
         }
 
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
+            Log.Information("Write {count} bytes to multiplexed stream {id}", count, Id);
+            if (_options.DumpHex)
+                Console.WriteLine(Utils.HexDump(buffer, 0, count));
+
+            if (_options.DumpText)
+            {
+                var text = Encoding.UTF8.GetString(buffer, 0, count);
+                Console.WriteLine(text);
+            }
+
             return _connection.WriteMultiplexedData(Id, new ArraySegment<byte>(buffer, offset, count));
         }
 

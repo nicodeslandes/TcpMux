@@ -15,6 +15,10 @@
     "TcpMux demux": {
       "commandName": "Project",
       "commandLineArgs": "-demux -l 1223 -v"
+    },
+    "TcpMux mux": {
+      "commandName": "Project",
+      "commandLineArgs": "-l 443 -t localhost:44341 -ssl -v -mux localhost:1223 -hex"
     }
   }
 }

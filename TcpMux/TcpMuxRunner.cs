@@ -31,7 +31,7 @@ namespace TcpMux
             {
                 Log.Information("Opening multiplexing connection to {target}",
                     options.MultiplexingTarget.ToShortString());
-                _multiplexingConnection = new MultiplexingConnection(options.MultiplexingTarget);
+                _multiplexingConnection = new MultiplexingConnection(options.MultiplexingTarget, options);
             }
         }
 
@@ -230,7 +230,7 @@ namespace TcpMux
                         return;
                     }
 
-                    Log.Information("Sending data from {source} to {target}...", source, target);
+                    Log.Information("Sending {count:N0} bytes from {source} to {target}...", read, source, target);
                     if (_options.DumpHex)
                         Console.WriteLine(Utils.HexDump(buffer, 0, read));
 

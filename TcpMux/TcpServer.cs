@@ -35,7 +35,7 @@ namespace TcpMux
             var listener = new TcpListener(IPAddress.Any, listenPort);
             listener.Server.LingerState = new LingerOption(enable: false, seconds: 0);
             listener.Start();
-            Log.Information("Port {port} succesfully opened", listenPort);
+            Log.Information("Port {port} successfully opened", listenPort);
             return listener;
         }
     }
