@@ -14,11 +14,11 @@
     },
     "TcpMux demux": {
       "commandName": "Project",
-      "commandLineArgs": "-demux -l 1223 -v"
+      "commandLineArgs": "-demux -l 1223 -v -hex -forceDns"
     },
     "TcpMux mux": {
       "commandName": "Project",
-      "commandLineArgs": "-l 443 -t localhost:44341 -ssl -v -mux localhost:1223 -hex"
+      "commandLineArgs": "-mux localhost:1223 -v -hex -l 443 -sni -ssl"
     }
   }
 }

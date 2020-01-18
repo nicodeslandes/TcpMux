@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
-using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -12,6 +11,7 @@ using TcpMux.Extensions;
 
 namespace TcpMux
 {
+    // TODO: Handle connection closes
     class DemultiplexingConnection
     {
         private readonly EndPointStream _stream;
@@ -103,7 +103,7 @@ namespace TcpMux
             Log.Verbose("Writing multiplexed packet; stream id: {id}; data length: {count} bytes",
                 packet.StreamId, packet.Data.Count);
             await _writer.WriteAsync(packet.StreamId);
-            await _writer.WriteAsync(packet.Data.Count);
+            await _writer.WriteAsync((ushort)packet.Data.Count);
             await _writer.WriteAsync(packet.Data.Array!, packet.Data.Offset, packet.Data.Count);
             await _writer.FlushAsync();
         }
@@ -127,6 +127,11 @@ namespace TcpMux
         {
             StreamId = streamId;
             Data = data;
+
+            if (Data.Count > ushort.MaxValue)
+            {
+                throw new ArgumentException($"Packet size {Data.Count} is too big; it should not exceed 65536");
+            }
         }
         public int StreamId { get; }
         public ArraySegment<byte> Data { get; }

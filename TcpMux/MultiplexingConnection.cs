@@ -14,6 +14,7 @@ using TcpMux.Options;
 
 namespace TcpMux
 {
+    // TODO: Handle connection closes
     class MultiplexingConnection
     {
         private readonly DnsEndPoint _multiplexerTarget;
@@ -65,10 +66,14 @@ namespace TcpMux
 
         private async ValueTask WriteToMultiplexedStream(int streamId, ArraySegment<byte> data)
         {
-            if (!_multiplexedStreams.TryGetValue(streamId, out var multiplexedStream))
+            MultiplexedStream? multiplexedStream;
+            lock (_lock)
             {
-                Log.Error("Unknown stream id: {streamId}", streamId);
-                return;
+                if (!_multiplexedStreams.TryGetValue(streamId, out multiplexedStream))
+                {
+                    Log.Error("Unknown stream id: {streamId}", streamId);
+                    return;
+                }
             }
 
             await multiplexedStream.AddPendingData(data);
@@ -78,7 +83,10 @@ namespace TcpMux
         {
             // Create the new stream
             var stream = new MultiplexedStream(this, GetNextStreamId(), _options);
-            _multiplexedStreams[stream.Id] = stream;
+            lock (_lock)
+            {
+                _multiplexedStreams[stream.Id] = stream;
+            }
 
             // Send through the target descriptions
             Log.Verbose("Writing to multiplexed stream {id}: {host},{port}", stream.Id, target.Host, target.Port);

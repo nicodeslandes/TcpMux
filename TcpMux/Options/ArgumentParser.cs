@@ -27,7 +27,7 @@ namespace TcpMux.Options
                     throw new InvalidOptionException("Sni options requires SSL handling with the -ssl option");
                 }
 
-                if (options.Target is null && !options.SniRouting && options.MultiplexingMode == MultiplexingMode.None)
+                if (options.Target is null && !options.SniRouting && options.RunningMode != RunningMode.RegisterCACert && options.MultiplexingMode == MultiplexingMode.None)
                 {
                     throw new InvalidOptionException("Please specify a target with the -t option");
                 }
