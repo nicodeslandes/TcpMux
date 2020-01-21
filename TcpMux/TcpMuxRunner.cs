@@ -3,13 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Security;
-using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using DnsClient;
 using Serilog;
 using TcpMux.Extensions;
 using TcpMux.Options;
@@ -19,13 +16,13 @@ namespace TcpMux
     public class TcpMuxRunner
     {
         private readonly TcpMuxOptions _options;
-        private readonly Lazy<LookupClient> _dnsLookupClient;
         private readonly MultiplexingConnection? _multiplexingConnection;
+        private readonly TrafficRouter _router;
 
         public TcpMuxRunner(TcpMuxOptions options)
         {
             _options = options;
-            _dnsLookupClient = new Lazy<LookupClient>(() => new LookupClient());
+            _router = new TrafficRouter(_options);
 
             if (options.MultiplexingMode == MultiplexingMode.Multiplexer && options.MultiplexingTarget != null)
             {
@@ -52,7 +49,7 @@ namespace TcpMux
             }
 
 
-            var tcpServer = new TcpServer(_options);
+            var tcpServer = new TcpServer(_options.ListenPort);
             var connectionSource =
                 _options.MultiplexingMode == MultiplexingMode.Demultiplexer ? OpenDemultiplexingServer(tcpServer)
                 : tcpServer.GetClientConnections();
@@ -122,8 +119,13 @@ namespace TcpMux
                 }
 
                 var targetStream = await OpenTargetStream(target);
-                RouteMessages(clientStream, targetStream);
-                RouteMessages(targetStream, clientStream);
+                if (_options.Ssl || _options.SslOffload)
+                {
+                    targetStream = await HandleSslTarget(targetStream, target);
+                }
+                
+                _router.RouteMessages(clientStream, targetStream);
+                _router.RouteMessages(targetStream, clientStream);
             }
 #pragma warning disable CA1031 // Do not catch general exception types
             catch (Exception ex)
@@ -135,14 +137,15 @@ namespace TcpMux
 
         private async Task<EndPointStream> OpenTargetStream(DnsEndPoint target)
         {
-            var targetStream = await ConnectToTarget(target);
-
-            if (_options.Ssl || _options.SslOffload)
+            if (_options.MultiplexingMode == MultiplexingMode.Multiplexer)
             {
-                targetStream = await HandleSslTarget(targetStream, target);
+                // We're in multiplexer mode; instead of connecting to the target, we simply
+                // create a new multipexed stream for the target
+                var stream = await CreateMultiplexedStream(target);
+                return new EndPointStream(stream, target);
             }
 
-            return targetStream;
+            return _router.ConnectToTarget(target);
         }
 
         private async Task<(EndPointStream stream, DnsEndPoint? target)> NegotiateSslConnection(
@@ -185,65 +188,12 @@ namespace TcpMux
             return new EndPointStream(sslTargetStream, targetStream.EndPoint);
         }
 
-        private async Task<EndPointStream> ConnectToTarget(DnsEndPoint target)
-        {
-            var targetHost = target.Host;
-            var targetPort = target.Port;
-
-            if (_options.MultiplexingMode == MultiplexingMode.Multiplexer)
-            {
-                // We're in multiplexer mode; instead of connecting to the target, we simply
-                // create a new multipexed stream for the target
-                var stream = await CreateMultiplexedStream(target);
-                return new EndPointStream(stream, target);
-            }
-
-            Log.Information("Opening connection to {target}", target.ToShortString());
-            if (_options.ForceDnsResolution)
-            {
-                targetHost = _dnsLookupClient.Value.GetHostEntry(targetHost).AddressList[0].ToString();
-            }
-
-            var tcpClient = new TcpClient(targetHost, targetPort) { NoDelay = true };
-            Log.Information("Opened target connection: {endPoint}", tcpClient.Client.RemoteEndPoint);
-            return new EndPointStream(tcpClient.GetStream(), tcpClient.Client.RemoteEndPoint);
-        }
-
         private Task<Stream> CreateMultiplexedStream(DnsEndPoint target)
         {
             Log.Debug("Creating new multiplexed stream to {target}", target.ToShortString());
             return _multiplexingConnection!.CreateMultiplexedStream(target);
         }
 
-        private void RouteMessages(EndPointStream source, EndPointStream target)
-        {
-            var buffer = new byte[65536];
-            Task.Run(async () =>
-            {
-                while (true)
-                {
-                    var read = await source.Stream.ReadAsync(buffer, 0, buffer.Length);
-                    if (read == 0)
-                    {
-                        Log.Information("Connection {source} closed; closing connection {target}", source, target);
-                        target.Stream.Close();
-                        return;
-                    }
-
-                    Log.Information("Sending {count:N0} bytes from {source} to {target}...", read, source, target);
-                    if (_options.DumpHex)
-                        Console.WriteLine(Utils.HexDump(buffer, 0, read));
-
-                    if (_options.DumpText)
-                    {
-                        var text = Encoding.UTF8.GetString(buffer, 0, read);
-                        Console.WriteLine(text);
-                    }
-                    await target.Stream.WriteAsync(buffer, 0, read);
-                    Log.Verbose("{read} bytes sent", read);
-                }
-            });
-        }
 
         private bool ValidateCertificate(object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {

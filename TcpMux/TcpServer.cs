@@ -8,13 +8,11 @@ namespace TcpMux
 {
     public class TcpServer : IConnectionSource
     {
-        private readonly TcpMuxOptions _options;
         private readonly TcpListener _server;
 
-        public TcpServer(TcpMuxOptions options)
+        public TcpServer(int listeningPort)
         {
-            _options = options;
-            _server = StartTcpListener();
+            _server = StartTcpListener(listeningPort);
         }
 
         public async IAsyncEnumerable<EndPointStream> GetClientConnections()
@@ -28,14 +26,13 @@ namespace TcpMux
             }
         }
 
-        private TcpListener StartTcpListener()
+        private TcpListener StartTcpListener(int port)
         {
-            var listenPort = _options.ListenPort;
-            Log.Information("Opening local port {port}", listenPort);
-            var listener = new TcpListener(IPAddress.Any, listenPort);
+            Log.Information("Opening local port {port}", port);
+            var listener = new TcpListener(IPAddress.Any, port);
             listener.Server.LingerState = new LingerOption(enable: false, seconds: 0);
             listener.Start();
-            Log.Information("Port {port} successfully opened", listenPort);
+            Log.Information("Port {port} successfully opened", port);
             return listener;
         }
     }

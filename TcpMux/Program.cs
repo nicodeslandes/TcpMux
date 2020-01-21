@@ -39,6 +39,10 @@ namespace TcpMux
                     var runner = new TcpMuxRunner(options);
                     runner.Run();
                     break;
+                case RunningMode.TunnelIn:
+                    var tunnelRunner = new TunnelRunner(options);
+                    tunnelRunner.Run();
+                    break;
                 default:
                     Console.Error.WriteLine($"Unsupported running mode: {options.RunningMode}");
                     return 1;
