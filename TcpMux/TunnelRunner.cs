@@ -12,6 +12,7 @@ namespace TcpMux
         private readonly TcpMuxOptions _options;
         private readonly Channel<EndPointStream> _tunnelConnections = Channel.CreateUnbounded<EndPointStream>();
         private readonly TrafficRouter _router;
+        private static readonly ReadOnlyMemory<byte> NewClientConnectionMessage = new byte[] { 1 }; 
 
         public TunnelRunner(TcpMuxOptions options)
         {
@@ -76,7 +77,7 @@ namespace TcpMux
 
         private async Task StartTunnelConnectionListener()
         {
-            TcpServer server = new TcpServer(_options.TunnelListenPort);
+            var server = new TcpServer(_options.TunnelListenPort);
             await foreach (var connection in server.GetClientConnections())
             {
                 Log.Information("New tunnel connection from {client}", connection);
@@ -95,10 +96,12 @@ namespace TcpMux
                 // Get the next tunnel connection and bridge traffic between the 2
                 var tunnelConnection = await _tunnelConnections.Reader.ReadAsync();
 
+                // Send a single byte to notify the remote tunnel that a new client connection has been received
+                await tunnelConnection.Stream.WriteAsync(NewClientConnectionMessage);
+
                 _router.RouteMessages(connection, tunnelConnection);
                 _router.RouteMessages(tunnelConnection, connection);
             }
-
         }
     }
 }
