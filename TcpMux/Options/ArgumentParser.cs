@@ -27,9 +27,14 @@ namespace TcpMux.Options
                     throw new InvalidOptionException("Sni options requires SSL handling with the -ssl option");
                 }
 
-                if (options.Target is null && !options.SniRouting && options.RunningMode != RunningMode.RegisterCACert && options.MultiplexingMode == MultiplexingMode.None)
+                if (options.Target is null && !options.SniRouting && (options.RunningMode == RunningMode.Client || options.RunningMode == RunningMode.TunnelOut) && options.MultiplexingMode == MultiplexingMode.None)
                 {
                     throw new InvalidOptionException("Please specify a target with the -t option");
+                }
+
+                if (options.RunningMode == RunningMode.TunnelIn && options.ListenPort == 0)
+                {
+                    throw new InvalidOptionException("Please specify a listening port with -l and tunneling listening port the -tl option");
                 }
 
                 if (options.MultiplexingMode == MultiplexingMode.Demultiplexer && options.ListenPort == 0)
@@ -94,9 +99,6 @@ namespace TcpMux.Options
                         case "-text":
                             options.DumpText = true;
                             break;
-                        case "-s":
-                            SetRunningMode(RunningMode.Server);
-                            break;
                         case "-regCA":
                             SetRunningMode(RunningMode.RegisterCACert);
                             // Skip remaining arguments
@@ -107,6 +109,14 @@ namespace TcpMux.Options
                             break;
                         case "-demux":
                             options.MultiplexingMode = MultiplexingMode.Demultiplexer;
+                            break;
+                        case "-tunnelIn":
+                            SetRunningMode(RunningMode.TunnelIn);
+                            options.TunnelListenPort = ReadNextArgument<ushort>("Tunnel Listen Port");
+                            break;
+                        case "-tunnelOut":
+                            SetRunningMode(RunningMode.TunnelOut);
+                            options.TunnelTarget = ReadNextArgument<DnsEndPoint>("TunnelTarget");
                             break;
                         default:
                             throw new InvalidOptionException($"Invalid option: {arg}");

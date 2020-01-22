@@ -40,6 +40,7 @@ namespace TcpMux
                     runner.Run();
                     break;
                 case RunningMode.TunnelIn:
+                case RunningMode.TunnelOut:
                     var tunnelRunner = new TunnelRunner(options);
                     tunnelRunner.Run();
                     break;

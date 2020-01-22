@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Serilog;
+using TcpMux.Extensions;
 using TcpMux.Options;
 
 namespace TcpMux
@@ -30,13 +32,14 @@ namespace TcpMux
             else if(_options.RunningMode == RunningMode.TunnelOut)
             {
                 Task.Run(StartTunnelConnector);
-                Task.Run(RunAsReceiver);
-
             }
             else
             {
                 throw new InvalidOperationException($"Unhandled Running mode: {_options.RunningMode}");
             }
+
+            Console.WriteLine("Press Ctrl-C to exit");
+            Thread.CurrentThread.Join();
         }
 
         private async Task StartTunnelConnector()
@@ -50,8 +53,9 @@ namespace TcpMux
             {
                 // Establish connection to tunnel receiver
                 var tunnelEndPoint = _options.TunnelTarget!;
+                Log.Debug("Opening connection to tunnel receiver {endpoint}", tunnelEndPoint.ToShortString());
                 var tunnelClient = new TcpClient(tunnelEndPoint.Host, tunnelEndPoint.Port) { NoDelay = true };
-                Log.Information("Opened target connection: {endPoint}", tunnelClient.Client.RemoteEndPoint);
+                Log.Information("Opened tunnel connection: {endPoint}", tunnelClient.Client.RemoteEndPoint);
                 var tunnelEndPointStream = new EndPointStream(
                     tunnelClient.GetStream(), tunnelClient.Client.RemoteEndPoint);
 
