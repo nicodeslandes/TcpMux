@@ -61,8 +61,10 @@ namespace TcpMux
 
                 // Wait for the 1st byte; which means a remote connection has been established on the other side of
                 // the tunnel
+                Log.Verbose("Waiting for 1st byte from tunnel connection");
                 var buffer = new byte[1];
                 var read = await tunnelEndPointStream.Stream.ReadAsync(buffer, 0, 1);
+                Log.Verbose("1st byte received from tunnel connection");
 
                 // Check for connection closure
                 if (read == 0)
@@ -98,7 +100,9 @@ namespace TcpMux
                 Log.Information("New connection from {client}", connection);
 
                 // Get the next tunnel connection and bridge traffic between the 2
+                Log.Verbose("Retrieving next available tunnel connection");
                 var tunnelConnection = await _tunnelConnections.Reader.ReadAsync();
+                Log.Debug("Using tunnel connection {connection}; sending 1-byte connection message", tunnelConnection);
 
                 // Send a single byte to notify the remote tunnel that a new client connection has been received
                 await tunnelConnection.Stream.WriteAsync(NewClientConnectionMessage);

@@ -19,6 +19,7 @@ namespace TcpMux
         {
             while (true)
             {
+                Log.Debug("Waiting for connection on port {endpoint}", _server.LocalEndpoint);
                 var client = await _server.AcceptTcpClientAsync();
                 client.NoDelay = true;
                 Log.Information("New client connection: {client}", client.Client.RemoteEndPoint);
